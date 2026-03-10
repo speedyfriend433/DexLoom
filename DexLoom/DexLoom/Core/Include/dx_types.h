@@ -37,6 +37,8 @@ typedef enum {
     DX_ERR_AXML_INVALID,
     DX_ERR_UNSUPPORTED_VERSION,
     DX_ERR_INTERNAL,
+    DX_ERR_SIGNAL,              // Recovered from SIGSEGV/SIGBUS via crash isolation
+    DX_ERR_BUDGET_EXHAUSTED,    // Instruction budget exhausted (infinite loop watchdog)
 } DxResult;
 
 // Value types for the register file

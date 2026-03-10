@@ -266,22 +266,23 @@ This is **not achievable** in full. The goal is to maximize the subset of APKs t
 - [x] Reference type detection
 
 #### Remaining Work: Resource Resolution
-- [ ] [MISSING] **Style resource resolution** — styles are the backbone of Android theming; without this, themed apps look wrong
-  - [ ] Parse style parent references
-  - [ ] Resolve style attribute inheritance chains
-  - [ ] Apply style attributes to views during inflation
-- [ ] [MISSING] **Theme resolution** — android:theme on Application/Activity
-  - [ ] Parse theme attributes from resources.arsc
-  - [ ] Apply theme defaults to unset view attributes
+- [x] [DONE] **Style resource resolution** — ResTable_map_entry parsing, parent chain traversal (20 levels), child-overrides-parent
+  - [x] Parse style parent references
+  - [x] Resolve style attribute inheritance chains
+  - [x] Apply style attributes to views during inflation (as defaults, direct attrs override)
+- [x] [DONE] **Theme resolution** — android:theme on Application extracted from manifest, DxTheme created at runtime
+  - [x] Parse theme attributes from resources.arsc (complex/bag entries)
+  - [x] Apply theme defaults to unset view attributes
+  - [x] ?attr/ reference resolution through theme (colorPrimary, colorAccent, windowBackground, textColorPrimary)
   - [ ] Support theme overlay composition
-- [ ] [MISSING] **Qualifier resolution system**
-  - [ ] Locale qualifiers (en, fr, ja, zh-rCN)
-  - [ ] Screen density qualifiers (mdpi, hdpi, xhdpi, xxhdpi, xxxhdpi)
+- [x] [DONE] **Qualifier resolution system** — DxResConfig parsed from ResTable_config; DxDeviceConfig (440dpi, en-US, SDK 33)
+  - [x] Locale qualifiers (language+country matching with scoring)
+  - [x] Screen density qualifiers (LDPI through XXXHDPI, closest-match with higher-preferred)
+  - [x] Orientation qualifiers (port, land)
+  - [x] API level qualifier (SDK version, highest <= device)
+  - [x] Best-match algorithm: eliminate contradictions, score by locale>SDK>density>orientation
   - [ ] Screen size qualifiers (small, normal, large, xlarge)
-  - [ ] Orientation qualifiers (port, land)
   - [ ] Night mode qualifier (night, notnight)
-  - [ ] API level qualifier (v21, v26, v28)
-  - [ ] Best-match algorithm per Android qualifier precedence rules
 - [x] [PARTIAL] **Drawable resources**
   - [x] PNG/JPEG decoding from res/drawable-* (via dx_ui_extract_drawable + UIImage)
   - [ ] 9-patch PNG support
@@ -290,7 +291,7 @@ This is **not achievable** in full. The goal is to maximize the subset of APKs t
   - [ ] LayerDrawable, InsetDrawable, ShapeDrawable
 - [ ] [MISSING] **Array resources** (`<string-array>`, `<integer-array>`)
 - [ ] [MISSING] **Plural resources** (`<plurals>`)
-- [ ] [MISSING] **Attribute reference resolution** (@attr, ?attr)
+- [x] [DONE] **Attribute reference resolution** (?attr resolved via theme; @style applied during inflation)
 - [ ] [HARDEN] Detect and handle circular style references
 - [ ] [OPTIMIZE] Resource cache with LRU eviction for repeated lookups
 
@@ -494,7 +495,7 @@ This is **not achievable** in full. The goal is to maximize the subset of APKs t
 - [ ] [MISSING] **invoke-polymorphic** — required for MethodHandle.invoke/invokeExact
 - [ ] [MISSING] const-method-handle / const-method-type real values
 - [x] [DONE] Bounds check via CODE_AT() macro for safe code access
-- [ ] [HARDEN] Validate register indices before every register access
+- [x] [DONE] Validate register indices via CHECK_REG macro on critical opcodes
 - [x] [DONE] Integer overflow protection in div/rem (INT_MIN / -1 returns INT_MIN, INT_MIN % -1 returns 0)
 - [ ] [OPTIMIZE] Computed goto dispatch (gcc/clang extension) instead of switch
 - [ ] [OPTIMIZE] Register caching (avoid DxValue indirection for hot registers)
@@ -840,9 +841,10 @@ This is **not achievable** in full. The goal is to maximize the subset of APKs t
 - [ ] [HARDEN] **Integer overflow**: audit all size calculations (count * sizeof)
 - [ ] [HARDEN] **Buffer overflow**: bounds check on all array accesses in parsers
 - [ ] [HARDEN] **Stack depth**: enforce DX_MAX_STACK_DEPTH consistently (128)
-- [ ] [HARDEN] **Heap exhaustion**: graceful error when heap is full after GC
-- [ ] [HARDEN] **Infinite loop detection**: instruction budget already exists; consider method-level budgets
-- [ ] [MISSING] **Crash isolation**: catch C-level crashes (SIGSEGV, etc.) and report instead of terminating
+- [x] [DONE] **Heap exhaustion**: OutOfMemoryError with descriptive message on alloc_object/alloc_array failure
+- [x] [DONE] **Infinite loop detection**: DX_ERR_BUDGET_EXHAUSTED with method name, PC, last 16 instructions trace
+- [x] [DONE] **Crash isolation**: SIGSEGV/SIGBUS signal handlers with sigsetjmp/siglongjmp recovery; DX_ERR_SIGNAL
+- [x] [DONE] **Register bounds checking**: CHECK_REG macro on move/aget/aput/iget/iput; DX_ERR_VERIFICATION on violation
 - [ ] [MISSING] **Fuzzing harness**: AFL/libFuzzer targets for APK, DEX, AXML, resources.arsc parsers
 - [ ] [MISSING] **Memory sanitizer**: run under ASan/MSan periodically
 

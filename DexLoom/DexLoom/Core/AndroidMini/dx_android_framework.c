@@ -213,6 +213,8 @@ static DxResult native_get_system_service(DxVM *vm, DxFrame *frame,
         stub_class = "Landroid/app/ActivityManager;";
     else if (strcmp(svc_name, "audio") == 0)
         stub_class = "Landroid/media/AudioManager;";
+    else if (strcmp(svc_name, "location") == 0)
+        stub_class = "Landroid/location/LocationManager;";
 
     if (stub_class) {
         DxClass *cls = dx_vm_find_class(vm, stub_class);
@@ -8389,6 +8391,268 @@ static DxResult native_pair_toString(DxVM *vm, DxFrame *frame, DxValue *args, ui
     return DX_OK;
 }
 
+// ============================================================
+// Location native methods (field-backed)
+// ============================================================
+
+static DxResult native_location_init(DxVM *vm, DxFrame *frame, DxValue *args, uint32_t arg_count) {
+    (void)frame;
+    DxObject *self = (arg_count > 0 && args[0].tag == DX_VAL_OBJ) ? args[0].obj : NULL;
+    if (self) {
+        DxValue provider = (arg_count > 1 && args[1].tag == DX_VAL_OBJ) ? args[1] : DX_NULL_VALUE;
+        dx_vm_set_field(self, "provider", provider);
+        dx_vm_set_field(self, "latitude", (DxValue){.tag = DX_VAL_DOUBLE, .d = 0.0});
+        dx_vm_set_field(self, "longitude", (DxValue){.tag = DX_VAL_DOUBLE, .d = 0.0});
+        dx_vm_set_field(self, "altitude", (DxValue){.tag = DX_VAL_DOUBLE, .d = 0.0});
+        dx_vm_set_field(self, "accuracy", (DxValue){.tag = DX_VAL_FLOAT, .f = 0.0f});
+        dx_vm_set_field(self, "time", (DxValue){.tag = DX_VAL_LONG, .l = 0});
+    }
+    return DX_OK;
+}
+
+static DxResult native_location_get_latitude(DxVM *vm, DxFrame *frame, DxValue *args, uint32_t arg_count) {
+    (void)vm; (void)arg_count;
+    DxObject *self = (args[0].tag == DX_VAL_OBJ) ? args[0].obj : NULL;
+    DxValue val;
+    if (self && dx_vm_get_field(self, "latitude", &val) == DX_OK && val.tag == DX_VAL_DOUBLE) {
+        frame->result = val;
+    } else {
+        frame->result = (DxValue){.tag = DX_VAL_DOUBLE, .d = 0.0};
+    }
+    frame->has_result = true;
+    return DX_OK;
+}
+
+static DxResult native_location_get_longitude(DxVM *vm, DxFrame *frame, DxValue *args, uint32_t arg_count) {
+    (void)vm; (void)arg_count;
+    DxObject *self = (args[0].tag == DX_VAL_OBJ) ? args[0].obj : NULL;
+    DxValue val;
+    if (self && dx_vm_get_field(self, "longitude", &val) == DX_OK && val.tag == DX_VAL_DOUBLE) {
+        frame->result = val;
+    } else {
+        frame->result = (DxValue){.tag = DX_VAL_DOUBLE, .d = 0.0};
+    }
+    frame->has_result = true;
+    return DX_OK;
+}
+
+static DxResult native_location_get_altitude(DxVM *vm, DxFrame *frame, DxValue *args, uint32_t arg_count) {
+    (void)vm; (void)arg_count;
+    DxObject *self = (args[0].tag == DX_VAL_OBJ) ? args[0].obj : NULL;
+    DxValue val;
+    if (self && dx_vm_get_field(self, "altitude", &val) == DX_OK && val.tag == DX_VAL_DOUBLE) {
+        frame->result = val;
+    } else {
+        frame->result = (DxValue){.tag = DX_VAL_DOUBLE, .d = 0.0};
+    }
+    frame->has_result = true;
+    return DX_OK;
+}
+
+static DxResult native_location_get_accuracy(DxVM *vm, DxFrame *frame, DxValue *args, uint32_t arg_count) {
+    (void)vm; (void)arg_count;
+    DxObject *self = (args[0].tag == DX_VAL_OBJ) ? args[0].obj : NULL;
+    DxValue val;
+    if (self && dx_vm_get_field(self, "accuracy", &val) == DX_OK && val.tag == DX_VAL_FLOAT) {
+        frame->result = val;
+    } else {
+        frame->result = (DxValue){.tag = DX_VAL_FLOAT, .f = 0.0f};
+    }
+    frame->has_result = true;
+    return DX_OK;
+}
+
+static DxResult native_location_get_time(DxVM *vm, DxFrame *frame, DxValue *args, uint32_t arg_count) {
+    (void)vm; (void)arg_count;
+    DxObject *self = (args[0].tag == DX_VAL_OBJ) ? args[0].obj : NULL;
+    DxValue val;
+    if (self && dx_vm_get_field(self, "time", &val) == DX_OK && val.tag == DX_VAL_LONG) {
+        frame->result = val;
+    } else {
+        frame->result = (DxValue){.tag = DX_VAL_LONG, .l = 0};
+    }
+    frame->has_result = true;
+    return DX_OK;
+}
+
+static DxResult native_location_get_provider(DxVM *vm, DxFrame *frame, DxValue *args, uint32_t arg_count) {
+    (void)vm; (void)arg_count;
+    DxObject *self = (args[0].tag == DX_VAL_OBJ) ? args[0].obj : NULL;
+    DxValue val;
+    if (self && dx_vm_get_field(self, "provider", &val) == DX_OK) {
+        frame->result = val;
+    } else {
+        frame->result = DX_NULL_VALUE;
+    }
+    frame->has_result = true;
+    return DX_OK;
+}
+
+static DxResult native_location_set_latitude(DxVM *vm, DxFrame *frame, DxValue *args, uint32_t arg_count) {
+    (void)vm; (void)frame;
+    DxObject *self = (arg_count > 0 && args[0].tag == DX_VAL_OBJ) ? args[0].obj : NULL;
+    if (self && arg_count > 1) {
+        dx_vm_set_field(self, "latitude", args[1]);
+    }
+    return DX_OK;
+}
+
+static DxResult native_location_set_longitude(DxVM *vm, DxFrame *frame, DxValue *args, uint32_t arg_count) {
+    (void)vm; (void)frame;
+    DxObject *self = (arg_count > 0 && args[0].tag == DX_VAL_OBJ) ? args[0].obj : NULL;
+    if (self && arg_count > 1) {
+        dx_vm_set_field(self, "longitude", args[1]);
+    }
+    return DX_OK;
+}
+
+static DxResult native_location_set_altitude(DxVM *vm, DxFrame *frame, DxValue *args, uint32_t arg_count) {
+    (void)vm; (void)frame;
+    DxObject *self = (arg_count > 0 && args[0].tag == DX_VAL_OBJ) ? args[0].obj : NULL;
+    if (self && arg_count > 1) {
+        dx_vm_set_field(self, "altitude", args[1]);
+    }
+    return DX_OK;
+}
+
+static DxResult native_location_set_accuracy(DxVM *vm, DxFrame *frame, DxValue *args, uint32_t arg_count) {
+    (void)vm; (void)frame;
+    DxObject *self = (arg_count > 0 && args[0].tag == DX_VAL_OBJ) ? args[0].obj : NULL;
+    if (self && arg_count > 1) {
+        dx_vm_set_field(self, "accuracy", args[1]);
+    }
+    return DX_OK;
+}
+
+static DxResult native_location_set_time(DxVM *vm, DxFrame *frame, DxValue *args, uint32_t arg_count) {
+    (void)vm; (void)frame;
+    DxObject *self = (arg_count > 0 && args[0].tag == DX_VAL_OBJ) ? args[0].obj : NULL;
+    if (self && arg_count > 1) {
+        dx_vm_set_field(self, "time", args[1]);
+    }
+    return DX_OK;
+}
+
+static DxResult native_location_set_provider(DxVM *vm, DxFrame *frame, DxValue *args, uint32_t arg_count) {
+    (void)vm; (void)frame;
+    DxObject *self = (arg_count > 0 && args[0].tag == DX_VAL_OBJ) ? args[0].obj : NULL;
+    if (self && arg_count > 1) {
+        dx_vm_set_field(self, "provider", args[1]);
+    }
+    return DX_OK;
+}
+
+static DxResult native_location_distance_to(DxVM *vm, DxFrame *frame, DxValue *args, uint32_t arg_count) {
+    (void)vm; (void)args; (void)arg_count;
+    frame->result = (DxValue){.tag = DX_VAL_FLOAT, .f = 0.0f};
+    frame->has_result = true;
+    return DX_OK;
+}
+
+// LocationManager.getBestProvider(Criteria, boolean) -> "gps"
+static DxResult native_locmgr_get_best_provider(DxVM *vm, DxFrame *frame, DxValue *args, uint32_t arg_count) {
+    (void)args; (void)arg_count;
+    DxObject *str = dx_vm_create_string(vm, "gps");
+    frame->result = str ? DX_OBJ_VALUE(str) : DX_NULL_VALUE;
+    frame->has_result = true;
+    return DX_OK;
+}
+
+// ============================================================
+// NotificationChannel native methods (field-backed)
+// ============================================================
+
+static DxResult native_notif_channel_init(DxVM *vm, DxFrame *frame, DxValue *args, uint32_t arg_count) {
+    (void)frame;
+    DxObject *self = (arg_count > 0 && args[0].tag == DX_VAL_OBJ) ? args[0].obj : NULL;
+    if (self) {
+        DxValue id   = (arg_count > 1) ? args[1] : DX_NULL_VALUE;
+        DxValue name = (arg_count > 2) ? args[2] : DX_NULL_VALUE;
+        DxValue imp  = (arg_count > 3) ? args[3] : DX_INT_VALUE(0);
+        dx_vm_set_field(self, "id", id);
+        dx_vm_set_field(self, "name", name);
+        dx_vm_set_field(self, "importance", imp);
+        DX_INFO(TAG, "NotificationChannel created: id=%s",
+                (id.tag == DX_VAL_OBJ && id.obj) ? dx_vm_get_string_value(id.obj) : "?");
+    }
+    return DX_OK;
+}
+
+static DxResult native_notif_channel_get_id(DxVM *vm, DxFrame *frame, DxValue *args, uint32_t arg_count) {
+    (void)vm; (void)arg_count;
+    DxObject *self = (args[0].tag == DX_VAL_OBJ) ? args[0].obj : NULL;
+    DxValue val;
+    if (self && dx_vm_get_field(self, "id", &val) == DX_OK) {
+        frame->result = val;
+    } else {
+        frame->result = DX_NULL_VALUE;
+    }
+    frame->has_result = true;
+    return DX_OK;
+}
+
+static DxResult native_notif_channel_get_name(DxVM *vm, DxFrame *frame, DxValue *args, uint32_t arg_count) {
+    (void)vm; (void)arg_count;
+    DxObject *self = (args[0].tag == DX_VAL_OBJ) ? args[0].obj : NULL;
+    DxValue val;
+    if (self && dx_vm_get_field(self, "name", &val) == DX_OK) {
+        frame->result = val;
+    } else {
+        frame->result = DX_NULL_VALUE;
+    }
+    frame->has_result = true;
+    return DX_OK;
+}
+
+static DxResult native_notif_channel_get_importance(DxVM *vm, DxFrame *frame, DxValue *args, uint32_t arg_count) {
+    (void)vm; (void)arg_count;
+    DxObject *self = (args[0].tag == DX_VAL_OBJ) ? args[0].obj : NULL;
+    DxValue val;
+    if (self && dx_vm_get_field(self, "importance", &val) == DX_OK && val.tag == DX_VAL_INT) {
+        frame->result = val;
+    } else {
+        frame->result = DX_INT_VALUE(0);
+    }
+    frame->has_result = true;
+    return DX_OK;
+}
+
+// NotificationManager.createNotificationChannel - log and no-op
+static DxResult native_notifmgr_create_channel(DxVM *vm, DxFrame *frame, DxValue *args, uint32_t arg_count) {
+    (void)frame;
+    if (arg_count > 1 && args[1].tag == DX_VAL_OBJ && args[1].obj) {
+        DxValue id_val;
+        if (dx_vm_get_field(args[1].obj, "id", &id_val) == DX_OK && id_val.tag == DX_VAL_OBJ && id_val.obj) {
+            DX_INFO(TAG, "createNotificationChannel: %s", dx_vm_get_string_value(id_val.obj));
+        } else {
+            DX_INFO(TAG, "createNotificationChannel called");
+        }
+    }
+    return DX_OK;
+}
+
+// NotificationManager.notify(id, notification) - log and no-op
+static DxResult native_notifmgr_notify(DxVM *vm, DxFrame *frame, DxValue *args, uint32_t arg_count) {
+    (void)frame;
+    int32_t id = (arg_count > 1 && args[1].tag == DX_VAL_INT) ? args[1].i : 0;
+    DX_INFO(TAG, "NotificationManager.notify(id=%d) - stubbed", id);
+    return DX_OK;
+}
+
+// PendingIntent factory methods - return a stub PendingIntent object
+static DxResult native_pending_intent_factory(DxVM *vm, DxFrame *frame, DxValue *args, uint32_t arg_count) {
+    (void)args; (void)arg_count;
+    DxClass *pi_cls = dx_vm_find_class(vm, "Landroid/app/PendingIntent;");
+    if (pi_cls) {
+        DxObject *pi = dx_vm_alloc_object(vm, pi_cls);
+        frame->result = pi ? DX_OBJ_VALUE(pi) : DX_NULL_VALUE;
+    } else {
+        frame->result = DX_NULL_VALUE;
+    }
+    frame->has_result = true;
+    return DX_OK;
+}
+
 // Environment.getExternalStorageDirectory() -> File("/sdcard")
 static DxResult native_env_get_ext_storage(DxVM *vm, DxFrame *frame, DxValue *args, uint32_t arg_count) {
     (void)args; (void)arg_count;
@@ -11636,16 +11900,35 @@ DxResult dx_register_android_framework(DxVM *vm) {
     add_method(appcompat_alert_builder_cls, "create", "L", DX_ACC_PUBLIC, native_return_null, false);
     add_method(appcompat_alert_builder_cls, "show", "L", DX_ACC_PUBLIC, native_return_null, false);
 
+    // --- NotificationManager (enhanced with logging) ---
     DxClass *notification_mgr_cls = reg_class(vm, "Landroid/app/NotificationManager;", obj);
-    add_method(notification_mgr_cls, "notify", "VIL", DX_ACC_PUBLIC, native_noop, false);
+    add_method(notification_mgr_cls, "notify", "VIL", DX_ACC_PUBLIC, native_notifmgr_notify, false);
     add_method(notification_mgr_cls, "cancel", "VI", DX_ACC_PUBLIC, native_noop, false);
-    add_method(notification_mgr_cls, "createNotificationChannel", "VL", DX_ACC_PUBLIC, native_noop, false);
+    add_method(notification_mgr_cls, "cancelAll", "V", DX_ACC_PUBLIC, native_noop, false);
+    add_method(notification_mgr_cls, "createNotificationChannel", "VL", DX_ACC_PUBLIC,
+               native_notifmgr_create_channel, false);
+    add_method(notification_mgr_cls, "areNotificationsEnabled", "Z", DX_ACC_PUBLIC,
+               native_return_true, false);
 
+    // --- Notification (with priority constants) ---
     DxClass *notification_cls = reg_class(vm, "Landroid/app/Notification;", obj);
-    (void)notification_cls;
+    {
+        const char *notif_field_names[] = {
+            "PRIORITY_DEFAULT", "PRIORITY_LOW", "PRIORITY_MIN",
+            "PRIORITY_HIGH", "PRIORITY_MAX"
+        };
+        DxValue notif_field_vals[] = {
+            DX_INT_VALUE(0), DX_INT_VALUE(-1), DX_INT_VALUE(-2),
+            DX_INT_VALUE(1), DX_INT_VALUE(2)
+        };
+        add_static_fields(notification_cls, notif_field_names, notif_field_vals, 5);
+    }
 
+    // --- Notification.Builder ---
     DxClass *notification_builder_cls = reg_class(vm, "Landroid/app/Notification$Builder;", obj);
     add_method(notification_builder_cls, "<init>", "VLL", DX_ACC_PUBLIC | DX_ACC_CONSTRUCTOR,
+               native_noop, false);
+    add_method(notification_builder_cls, "<init>", "VL", DX_ACC_PUBLIC | DX_ACC_CONSTRUCTOR,
                native_noop, false);
     add_method(notification_builder_cls, "setContentTitle", "LL", DX_ACC_PUBLIC, native_return_self, false);
     add_method(notification_builder_cls, "setContentText", "LL", DX_ACC_PUBLIC, native_return_self, false);
@@ -11653,22 +11936,131 @@ DxResult dx_register_android_framework(DxVM *vm) {
     add_method(notification_builder_cls, "setLargeIcon", "LL", DX_ACC_PUBLIC, native_return_self, false);
     add_method(notification_builder_cls, "setPriority", "LI", DX_ACC_PUBLIC, native_return_self, false);
     add_method(notification_builder_cls, "setAutoCancel", "LZ", DX_ACC_PUBLIC, native_return_self, false);
+    add_method(notification_builder_cls, "setContentIntent", "LL", DX_ACC_PUBLIC, native_return_self, false);
+    add_method(notification_builder_cls, "addAction", "LILL", DX_ACC_PUBLIC, native_return_self, false);
+    add_method(notification_builder_cls, "setStyle", "LL", DX_ACC_PUBLIC, native_return_self, false);
+    add_method(notification_builder_cls, "setChannelId", "LL", DX_ACC_PUBLIC, native_return_self, false);
     add_method(notification_builder_cls, "build", "L", DX_ACC_PUBLIC, native_return_new_object, false);
 
+    // --- NotificationCompat.Builder (same API, androidx path) ---
+    DxClass *notif_compat_builder_cls = reg_class(vm, "Landroidx/core/app/NotificationCompat$Builder;", obj);
+    add_method(notif_compat_builder_cls, "<init>", "VLL", DX_ACC_PUBLIC | DX_ACC_CONSTRUCTOR,
+               native_noop, false);
+    add_method(notif_compat_builder_cls, "<init>", "VL", DX_ACC_PUBLIC | DX_ACC_CONSTRUCTOR,
+               native_noop, false);
+    add_method(notif_compat_builder_cls, "setContentTitle", "LL", DX_ACC_PUBLIC, native_return_self, false);
+    add_method(notif_compat_builder_cls, "setContentText", "LL", DX_ACC_PUBLIC, native_return_self, false);
+    add_method(notif_compat_builder_cls, "setSmallIcon", "LI", DX_ACC_PUBLIC, native_return_self, false);
+    add_method(notif_compat_builder_cls, "setLargeIcon", "LL", DX_ACC_PUBLIC, native_return_self, false);
+    add_method(notif_compat_builder_cls, "setPriority", "LI", DX_ACC_PUBLIC, native_return_self, false);
+    add_method(notif_compat_builder_cls, "setAutoCancel", "LZ", DX_ACC_PUBLIC, native_return_self, false);
+    add_method(notif_compat_builder_cls, "setContentIntent", "LL", DX_ACC_PUBLIC, native_return_self, false);
+    add_method(notif_compat_builder_cls, "addAction", "LILL", DX_ACC_PUBLIC, native_return_self, false);
+    add_method(notif_compat_builder_cls, "setStyle", "LL", DX_ACC_PUBLIC, native_return_self, false);
+    add_method(notif_compat_builder_cls, "setChannelId", "LL", DX_ACC_PUBLIC, native_return_self, false);
+    add_method(notif_compat_builder_cls, "build", "L", DX_ACC_PUBLIC, native_return_new_object, false);
+
+    // NotificationCompat parent class
+    DxClass *notif_compat_cls = reg_class(vm, "Landroidx/core/app/NotificationCompat;", obj);
+    (void)notif_compat_cls;
+
+    // --- NotificationChannel (field-backed: id, name, importance) ---
     DxClass *notification_channel_cls = reg_class(vm, "Landroid/app/NotificationChannel;", obj);
     add_method(notification_channel_cls, "<init>", "VLLI", DX_ACC_PUBLIC | DX_ACC_CONSTRUCTOR,
-               native_noop, false);
+               native_notif_channel_init, false);
     add_method(notification_channel_cls, "setDescription", "VL", DX_ACC_PUBLIC, native_noop, false);
+    add_method(notification_channel_cls, "setSound", "VLL", DX_ACC_PUBLIC, native_noop, false);
     add_method(notification_channel_cls, "enableLights", "VZ", DX_ACC_PUBLIC, native_noop, false);
+    add_method(notification_channel_cls, "enableVibration", "VZ", DX_ACC_PUBLIC, native_noop, false);
     add_method(notification_channel_cls, "setLightColor", "VI", DX_ACC_PUBLIC, native_noop, false);
+    add_method(notification_channel_cls, "setLockscreenVisibility", "VI", DX_ACC_PUBLIC, native_noop, false);
+    add_method(notification_channel_cls, "getId", "L", DX_ACC_PUBLIC,
+               native_notif_channel_get_id, false);
+    add_method(notification_channel_cls, "getName", "L", DX_ACC_PUBLIC,
+               native_notif_channel_get_name, false);
+    add_method(notification_channel_cls, "getImportance", "I", DX_ACC_PUBLIC,
+               native_notif_channel_get_importance, false);
 
+    // --- PendingIntent (with constants and factory methods returning stub objects) ---
     DxClass *pending_intent_cls = reg_class(vm, "Landroid/app/PendingIntent;", obj);
     add_method(pending_intent_cls, "getActivity", "LLILI", DX_ACC_PUBLIC | DX_ACC_STATIC,
-               native_return_null, true);
+               native_pending_intent_factory, true);
     add_method(pending_intent_cls, "getBroadcast", "LLILI", DX_ACC_PUBLIC | DX_ACC_STATIC,
-               native_return_null, true);
+               native_pending_intent_factory, true);
     add_method(pending_intent_cls, "getService", "LLILI", DX_ACC_PUBLIC | DX_ACC_STATIC,
-               native_return_null, true);
+               native_pending_intent_factory, true);
+    {
+        const char *pi_field_names[] = {
+            "FLAG_UPDATE_CURRENT", "FLAG_IMMUTABLE",
+            "FLAG_ONE_SHOT", "FLAG_CANCEL_CURRENT", "FLAG_NO_CREATE"
+        };
+        DxValue pi_field_vals[] = {
+            DX_INT_VALUE(0x08000000), DX_INT_VALUE(0x04000000),
+            DX_INT_VALUE(0x40000000), DX_INT_VALUE(0x10000000), DX_INT_VALUE(0x20000000)
+        };
+        add_static_fields(pending_intent_cls, pi_field_names, pi_field_vals, 5);
+    }
+
+    // --- android.location.Location (field-backed) ---
+    DxClass *location_cls = reg_class(vm, "Landroid/location/Location;", obj);
+    add_method(location_cls, "<init>", "VL", DX_ACC_PUBLIC | DX_ACC_CONSTRUCTOR,
+               native_location_init, false);
+    add_method(location_cls, "<init>", "V", DX_ACC_PUBLIC | DX_ACC_CONSTRUCTOR,
+               native_location_init, false);
+    add_method(location_cls, "getLatitude", "D", DX_ACC_PUBLIC, native_location_get_latitude, false);
+    add_method(location_cls, "getLongitude", "D", DX_ACC_PUBLIC, native_location_get_longitude, false);
+    add_method(location_cls, "getAltitude", "D", DX_ACC_PUBLIC, native_location_get_altitude, false);
+    add_method(location_cls, "getAccuracy", "F", DX_ACC_PUBLIC, native_location_get_accuracy, false);
+    add_method(location_cls, "getTime", "J", DX_ACC_PUBLIC, native_location_get_time, false);
+    add_method(location_cls, "getProvider", "L", DX_ACC_PUBLIC, native_location_get_provider, false);
+    add_method(location_cls, "setLatitude", "VD", DX_ACC_PUBLIC, native_location_set_latitude, false);
+    add_method(location_cls, "setLongitude", "VD", DX_ACC_PUBLIC, native_location_set_longitude, false);
+    add_method(location_cls, "setAltitude", "VD", DX_ACC_PUBLIC, native_location_set_altitude, false);
+    add_method(location_cls, "setAccuracy", "VF", DX_ACC_PUBLIC, native_location_set_accuracy, false);
+    add_method(location_cls, "setTime", "VJ", DX_ACC_PUBLIC, native_location_set_time, false);
+    add_method(location_cls, "setProvider", "VL", DX_ACC_PUBLIC, native_location_set_provider, false);
+    add_method(location_cls, "distanceTo", "FL", DX_ACC_PUBLIC, native_location_distance_to, false);
+
+    // --- android.location.LocationListener (interface) ---
+    DxClass *location_listener_cls = reg_class(vm, "Landroid/location/LocationListener;", obj);
+    location_listener_cls->access_flags = DX_ACC_INTERFACE | DX_ACC_ABSTRACT;
+    add_method(location_listener_cls, "onLocationChanged", "VL", DX_ACC_PUBLIC, native_noop, false);
+    add_method(location_listener_cls, "onStatusChanged", "VLI", DX_ACC_PUBLIC, native_noop, false);
+    add_method(location_listener_cls, "onProviderEnabled", "VL", DX_ACC_PUBLIC, native_noop, false);
+    add_method(location_listener_cls, "onProviderDisabled", "VL", DX_ACC_PUBLIC, native_noop, false);
+
+    // --- android.location.Criteria ---
+    DxClass *criteria_cls = reg_class(vm, "Landroid/location/Criteria;", obj);
+    add_method(criteria_cls, "<init>", "V", DX_ACC_PUBLIC | DX_ACC_CONSTRUCTOR, native_noop, false);
+    add_method(criteria_cls, "setAccuracy", "VI", DX_ACC_PUBLIC, native_noop, false);
+    add_method(criteria_cls, "setPowerRequirement", "VI", DX_ACC_PUBLIC, native_noop, false);
+    add_method(criteria_cls, "setAltitudeRequired", "VZ", DX_ACC_PUBLIC, native_noop, false);
+    add_method(criteria_cls, "setCostAllowed", "VZ", DX_ACC_PUBLIC, native_noop, false);
+
+    // --- android.location.LocationManager ---
+    DxClass *location_mgr_cls = reg_class(vm, "Landroid/location/LocationManager;", obj);
+    add_method(location_mgr_cls, "getLastKnownLocation", "LL", DX_ACC_PUBLIC,
+               native_return_null, false);
+    add_method(location_mgr_cls, "requestLocationUpdates", "VLJFL", DX_ACC_PUBLIC,
+               native_noop, false);
+    add_method(location_mgr_cls, "removeUpdates", "VL", DX_ACC_PUBLIC, native_noop, false);
+    add_method(location_mgr_cls, "isProviderEnabled", "ZL", DX_ACC_PUBLIC,
+               native_return_false, false);
+    add_method(location_mgr_cls, "getBestProvider", "LLZ", DX_ACC_PUBLIC,
+               native_locmgr_get_best_provider, false);
+    {
+        const char *loc_field_names[] = {
+            "GPS_PROVIDER", "NETWORK_PROVIDER", "PASSIVE_PROVIDER"
+        };
+        // Static string fields - store as string objects won't work with add_static_fields
+        // since it only stores DxValues. We use OBJ values with string objects.
+        DxValue loc_field_vals[] = {
+            DX_OBJ_VALUE(dx_vm_create_string(vm, "gps")),
+            DX_OBJ_VALUE(dx_vm_create_string(vm, "network")),
+            DX_OBJ_VALUE(dx_vm_create_string(vm, "passive"))
+        };
+        add_static_fields(location_mgr_cls, loc_field_names, loc_field_vals, 3);
+    }
 
     DxClass *activity_mgr_cls = reg_class(vm, "Landroid/app/ActivityManager;", obj);
     add_method(activity_mgr_cls, "getMemoryInfo", "VL", DX_ACC_PUBLIC, native_noop, false);

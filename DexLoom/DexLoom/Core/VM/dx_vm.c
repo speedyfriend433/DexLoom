@@ -4286,7 +4286,16 @@ DxObject *dx_vm_alloc_object(DxVM *vm, DxClass *cls) {
     }
 
     if (vm->heap_count >= DX_MAX_HEAP_OBJECTS) {
-        DX_ERROR(TAG, "Heap full (%u objects) even after GC", DX_MAX_HEAP_OBJECTS);
+        DX_ERROR(TAG, "Heap full (%u objects) even after GC — OutOfMemoryError", DX_MAX_HEAP_OBJECTS);
+        snprintf(vm->error_msg, sizeof(vm->error_msg),
+                 "OutOfMemoryError: heap exhausted (%u/%u objects) allocating %s",
+                 vm->heap_count, DX_MAX_HEAP_OBJECTS, cls->descriptor);
+        // Set pending exception so the interpreter can unwind properly
+        if (!vm->pending_exception) {
+            // Avoid recursive alloc: only create exception if we have headroom
+            // (the exception itself would need a heap slot, so skip if truly full)
+            DX_ERROR(TAG, "Cannot allocate OutOfMemoryError object (heap full)");
+        }
         return NULL;
     }
     // Warn when approaching limit
@@ -4295,7 +4304,11 @@ DxObject *dx_vm_alloc_object(DxVM *vm, DxClass *cls) {
     }
 
     DxObject *obj = (DxObject *)dx_malloc(sizeof(DxObject));
-    if (!obj) return NULL;
+    if (!obj) {
+        snprintf(vm->error_msg, sizeof(vm->error_msg),
+                 "OutOfMemoryError: malloc failed allocating %s", cls->descriptor);
+        return NULL;
+    }
 
     obj->klass = cls;
     obj->ref_count = 1;
@@ -4329,12 +4342,20 @@ DxObject *dx_vm_alloc_array(DxVM *vm, uint32_t length) {
     }
 
     if (vm->heap_count >= DX_MAX_HEAP_OBJECTS) {
-        DX_ERROR(TAG, "Heap full (%u objects) even after GC", DX_MAX_HEAP_OBJECTS);
+        DX_ERROR(TAG, "Heap full (%u objects) even after GC — OutOfMemoryError (array[%u])",
+                 DX_MAX_HEAP_OBJECTS, length);
+        snprintf(vm->error_msg, sizeof(vm->error_msg),
+                 "OutOfMemoryError: heap exhausted (%u/%u objects) allocating array[%u]",
+                 vm->heap_count, DX_MAX_HEAP_OBJECTS, length);
         return NULL;
     }
 
     DxObject *obj = (DxObject *)dx_malloc(sizeof(DxObject));
-    if (!obj) return NULL;
+    if (!obj) {
+        snprintf(vm->error_msg, sizeof(vm->error_msg),
+                 "OutOfMemoryError: malloc failed allocating array[%u]", length);
+        return NULL;
+    }
 
     obj->klass = vm->class_object;  // arrays are Object subtype
     obj->ref_count = 1;
@@ -4507,7 +4528,11 @@ DxMethod *dx_vm_resolve_method(DxVM *vm, uint32_t dex_method_idx) {
         return NULL;
     }
 
-    return dx_vm_find_method(cls, method_name, shorty);
+    DxMethod *m = dx_vm_find_method(cls, method_name, shorty);
+    if (m) return m;
+
+    // Fallback: search implemented interfaces for a default method
+    return dx_vm_find_interface_method(vm, cls, method_name, shorty);
 }
 
 DxMethod *dx_vm_find_method(DxClass *cls, const char *name, const char *shorty) {
@@ -4553,6 +4578,75 @@ DxMethod *dx_vm_find_method(DxClass *cls, const char *name, const char *shorty) 
     }
 
     return NULL;
+}
+
+// Search implemented interfaces for a default (non-abstract) method.
+// Handles diamond inheritance by preferring sub-interfaces over parent interfaces.
+DxMethod *dx_vm_find_interface_method(DxVM *vm, DxClass *cls, const char *name, const char *shorty) {
+    if (!vm || !cls || !name) return NULL;
+
+    DxMethod *best = NULL;
+
+    // Walk the class hierarchy upward, checking interfaces at each level
+    for (DxClass *cur = cls; cur != NULL; cur = cur->super_class) {
+        for (uint32_t i = 0; i < cur->interface_count; i++) {
+            if (!cur->interfaces[i]) continue;
+            DxClass *iface = dx_vm_find_class(vm, cur->interfaces[i]);
+            if (!iface) continue;
+
+            // Search this interface's virtual methods for a non-abstract match
+            for (uint32_t m = 0; m < iface->virtual_method_count; m++) {
+                DxMethod *im = &iface->virtual_methods[m];
+                if (strcmp(im->name, name) != 0) continue;
+                if (shorty && im->shorty && strcmp(im->shorty, shorty) != 0) continue;
+                // Must have code (default method) or be native — skip purely abstract
+                if (!im->has_code && !im->is_native) continue;
+                // Skip bridge methods if a non-bridge candidate exists already
+                if (best && (im->access_flags & DX_ACC_BRIDGE) && !(best->access_flags & DX_ACC_BRIDGE))
+                    continue;
+
+                if (!best) {
+                    best = im;
+                } else {
+                    // Diamond resolution: prefer the more-specific interface.
+                    // If this interface extends the interface that declared `best`,
+                    // then this one is more specific.
+                    DxClass *best_iface = best->declaring_class;
+                    if (best_iface) {
+                        for (uint32_t k = 0; k < iface->interface_count; k++) {
+                            if (iface->interfaces[k] && best_iface->descriptor &&
+                                strcmp(iface->interfaces[k], best_iface->descriptor) == 0) {
+                                // iface extends best_iface → iface is more specific
+                                best = im;
+                                break;
+                            }
+                        }
+                    }
+                    // Prefer non-bridge over bridge
+                    if ((best->access_flags & DX_ACC_BRIDGE) && !(im->access_flags & DX_ACC_BRIDGE)) {
+                        best = im;
+                    }
+                }
+            }
+
+            // Also recursively search parent interfaces of this interface
+            for (uint32_t k = 0; k < iface->interface_count; k++) {
+                if (!iface->interfaces[k]) continue;
+                DxClass *parent_iface = dx_vm_find_class(vm, iface->interfaces[k]);
+                if (!parent_iface) continue;
+                for (uint32_t m = 0; m < parent_iface->virtual_method_count; m++) {
+                    DxMethod *im = &parent_iface->virtual_methods[m];
+                    if (strcmp(im->name, name) != 0) continue;
+                    if (shorty && im->shorty && strcmp(im->shorty, shorty) != 0) continue;
+                    if (!im->has_code && !im->is_native) continue;
+                    // Only use parent interface method if we have no better candidate
+                    if (!best) best = im;
+                }
+            }
+        }
+    }
+
+    return best;
 }
 
 DxObject *dx_vm_create_exception(DxVM *vm, const char *class_descriptor, const char *message) {

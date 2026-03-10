@@ -34,6 +34,193 @@
 #define INITIAL_STYLE_CAPACITY 64
 #define MAX_STYLE_PARENT_DEPTH 20
 
+// ResTable_config field offsets within the config blob (relative to config start)
+// See Android's ResourceTypes.h ResTable_config struct layout:
+//   uint32_t size           @ 0
+//   uint16_t mcc            @ 4
+//   uint16_t mnc            @ 6
+//   char     language[2]    @ 8
+//   char     country[2]     @ 10
+//   uint8_t  orientation    @ 12
+//   uint8_t  touchscreen    @ 13
+//   uint16_t density        @ 14
+//   uint8_t  keyboard       @ 16
+//   uint8_t  navigation     @ 17
+//   uint8_t  inputFlags     @ 18
+//   uint8_t  inputPad0      @ 19
+//   uint16_t screenWidth    @ 20
+//   uint16_t screenHeight   @ 22
+//   uint16_t sdkVersion     @ 24
+//   uint16_t minorVersion   @ 26
+//   ... (more fields follow in larger configs)
+//   uint16_t smallestScreenWidthDp @ 36
+//   uint16_t screenWidthDp  @ 38
+//   uint16_t screenHeightDp @ 40
+
+// Forward declarations for helpers used by parse_res_config
+static uint16_t read_u16(const uint8_t *p);
+static uint32_t read_u32(const uint8_t *p);
+static bool is_default_config(const DxResConfig *c);
+static bool config_contradicts_device(const DxResConfig *cfg, const DxDeviceConfig *dev);
+static int32_t config_match_score(const DxResConfig *cfg, const DxDeviceConfig *dev);
+static const DxResourceEntry *pick_best_entry(const DxResources *res, uint32_t id,
+                                                const DxDeviceConfig *dev);
+
+// Parse a ResTable_config from raw bytes into our DxResConfig struct
+static DxResConfig parse_res_config(const uint8_t *cfg_data, uint32_t cfg_size) {
+    DxResConfig c;
+    memset(&c, 0, sizeof(c));
+    if (!cfg_data || cfg_size < 4) return c;
+
+    // Language and country (offset 8,10 from config start)
+    if (cfg_size >= 12) {
+        c.language[0] = (char)cfg_data[8];
+        c.language[1] = (char)cfg_data[9];
+        c.country[0]  = (char)cfg_data[10];
+        c.country[1]  = (char)cfg_data[11];
+    }
+    // Orientation (offset 12)
+    if (cfg_size >= 13) {
+        c.orientation = cfg_data[12];
+    }
+    // Density (offset 14, uint16 LE)
+    if (cfg_size >= 16) {
+        c.density = read_u16(cfg_data + 14);
+    }
+    // SDK version (offset 24, uint16 LE)
+    if (cfg_size >= 26) {
+        c.sdk_version = read_u16(cfg_data + 24);
+    }
+    // Screen width/height in pixels (offset 20,22)
+    if (cfg_size >= 24) {
+        c.screen_width = read_u16(cfg_data + 20);
+        c.screen_height = read_u16(cfg_data + 22);
+    }
+    // smallestScreenWidthDp (offset 36)
+    if (cfg_size >= 38) {
+        c.smallest_screen_width_dp = read_u16(cfg_data + 36);
+    }
+    return c;
+}
+
+// Initialize device config with typical iPhone defaults
+void dx_device_config_init(DxDeviceConfig *cfg) {
+    if (!cfg) return;
+    memset(cfg, 0, sizeof(*cfg));
+    cfg->language[0] = 'e'; cfg->language[1] = 'n'; cfg->language[2] = '\0';
+    cfg->country[0] = 'U'; cfg->country[1] = 'S'; cfg->country[2] = '\0';
+    cfg->density = 440;       // iPhone ~440 dpi
+    cfg->sdk_version = 33;    // emulate Android 13
+    cfg->screen_width = 393;  // iPhone 15 Pro logical width
+    cfg->screen_height = 852; // iPhone 15 Pro logical height
+    cfg->orientation = 1;     // portrait
+}
+
+// Check if a resource config is "default" (all qualifiers zero/empty)
+static bool is_default_config(const DxResConfig *c) {
+    return c->language[0] == 0 && c->country[0] == 0 &&
+           c->density == 0 && c->sdk_version == 0 &&
+           c->orientation == 0 && c->screen_width == 0 &&
+           c->screen_height == 0;
+}
+
+// Check if a config contradicts the device config (should be eliminated)
+static bool config_contradicts_device(const DxResConfig *cfg, const DxDeviceConfig *dev) {
+    // Orientation: if specified, must match
+    if (cfg->orientation != 0 && dev->orientation != 0 &&
+        cfg->orientation != dev->orientation) {
+        return true;
+    }
+    // SDK version: config requires higher SDK than device supports
+    if (cfg->sdk_version > dev->sdk_version) {
+        return true;
+    }
+    return false;
+}
+
+// Compute a match score for a resource config against device config.
+// Higher score = better match. Returns -1 if config contradicts device.
+static int32_t config_match_score(const DxResConfig *cfg, const DxDeviceConfig *dev) {
+    if (config_contradicts_device(cfg, dev)) return -1;
+
+    int32_t score = 0;
+
+    // --- Locale matching (highest priority) ---
+    if (cfg->language[0] != 0) {
+        bool lang_match = (cfg->language[0] == dev->language[0] &&
+                           cfg->language[1] == dev->language[1]);
+        if (!lang_match) {
+            return -1; // wrong locale, eliminate
+        }
+        score += 1000; // language matches
+        if (cfg->country[0] != 0) {
+            bool country_match = (cfg->country[0] == dev->country[0] &&
+                                  cfg->country[1] == dev->country[1]);
+            if (country_match) {
+                score += 500; // exact locale match
+            }
+            // Non-matching country is still OK, just lower priority
+        }
+    }
+
+    // --- SDK version: prefer highest version <= device ---
+    if (cfg->sdk_version > 0) {
+        score += (int32_t)cfg->sdk_version; // higher = better (already filtered > dev)
+    }
+
+    // --- Density matching: prefer closest, tie-break toward higher ---
+    if (cfg->density > 0 && cfg->density != DX_DENSITY_NODPI) {
+        int32_t diff = (int32_t)cfg->density - (int32_t)dev->density;
+        int32_t abs_diff = diff < 0 ? -diff : diff;
+        // Base density score: closer is better (max 640 dpi range -> invert)
+        int32_t density_score = 700 - abs_diff;
+        // Prefer higher density over lower when equidistant
+        if (diff > 0) density_score += 1;
+        if (density_score < 0) density_score = 0;
+        score += density_score;
+    } else if (cfg->density == DX_DENSITY_NODPI) {
+        // NODPI resources are density-independent, modest score
+        score += 100;
+    }
+
+    // --- Orientation match bonus ---
+    if (cfg->orientation != 0 && cfg->orientation == dev->orientation) {
+        score += 50;
+    }
+
+    return score;
+}
+
+// Pick the best matching entry among all entries with a given resource ID
+static const DxResourceEntry *pick_best_entry(const DxResources *res, uint32_t id,
+                                                const DxDeviceConfig *dev) {
+    if (!res || !dev) return NULL;
+
+    const DxResourceEntry *best = NULL;
+    int32_t best_score = -2; // worse than any contradiction
+
+    for (uint32_t i = 0; i < res->entry_count; i++) {
+        if (res->entries[i].id != id) continue;
+
+        const DxResourceEntry *e = &res->entries[i];
+        int32_t score;
+
+        if (is_default_config(&e->config)) {
+            // Default config: always valid, score 0 (lowest non-negative)
+            score = 0;
+        } else {
+            score = config_match_score(&e->config, dev);
+        }
+
+        if (score > best_score) {
+            best_score = score;
+            best = e;
+        }
+    }
+
+    return best;
+}
+
 // ResTable_entry flags
 #define FLAG_COMPLEX 0x0001
 
@@ -307,6 +494,19 @@ DxResult dx_resources_parse(const uint8_t *data, uint32_t size, DxResources **ou
                     uint32_t entry_count = read_u32(data + sub_pos + 48);
                     uint32_t entries_start = read_u32(data + sub_pos + 52);
 
+                    // Parse the ResTable_config embedded in this type chunk.
+                    // The config sits at offset 20 from chunk start (after
+                    // chunk_header(8) + id(1) + flags(1) + reserved(2) +
+                    // entryCount(4) + entriesStart(4)).
+                    // Config size = headerSize - 20.
+                    uint16_t header_size = read_u16(data + sub_pos + 2);
+                    DxResConfig type_config;
+                    memset(&type_config, 0, sizeof(type_config));
+                    if (header_size > 20 && sub_pos + header_size <= size) {
+                        uint32_t cfg_size = header_size - 20;
+                        type_config = parse_res_config(data + sub_pos + 20, cfg_size);
+                    }
+
                     const char *type_name_str = "";
                     if (type_strings && type_id > 0 && (type_id - 1) < type_str_count) {
                         type_name_str = type_strings[type_id - 1];
@@ -314,9 +514,6 @@ DxResult dx_resources_parse(const uint8_t *data, uint32_t size, DxResources **ou
 
                     bool is_string_type = (strcmp(type_name_str, "string") == 0);
                     bool is_layout_type = (strcmp(type_name_str, "layout") == 0);
-
-                    // Offset array starts at sub_pos + header_size (varies, typically 76 or 84)
-                    uint16_t header_size = read_u16(data + sub_pos + 2);
                     uint32_t offsets_base = sub_pos + header_size;
                     uint32_t entries_base = sub_pos + entries_start;
 
@@ -388,6 +585,7 @@ DxResult dx_resources_parse(const uint8_t *data, uint32_t size, DxResources **ou
                             re.value_type = RES_VALUE_TYPE_NULL;
                             re.entry_name = key_name ? dx_strdup(key_name) : NULL;
                             re.type_name = dx_strdup(type_name_str);
+                            re.config = type_config;
                             add_resource_entry(res, &re);
 
                             continue; // skip simple-value path
@@ -410,6 +608,7 @@ DxResult dx_resources_parse(const uint8_t *data, uint32_t size, DxResources **ou
                         re.value_type = val_type;
                         re.entry_name = key_name ? dx_strdup(key_name) : NULL;
                         re.type_name = dx_strdup(type_name_str);
+                        re.config = type_config;
 
                         switch (val_type) {
                             case RES_VALUE_TYPE_STRING:
@@ -599,6 +798,26 @@ const DxResourceEntry *dx_resources_find_by_id(const DxResources *res, uint32_t 
         }
     }
     return NULL;
+}
+
+const DxResourceEntry *dx_resources_find_by_id_q(const DxResources *res, uint32_t id,
+                                                   const DxDeviceConfig *dev) {
+    if (!res) return NULL;
+    if (!dev) return dx_resources_find_by_id(res, id); // fallback to first match
+    return pick_best_entry(res, id, dev);
+}
+
+const char *dx_resources_find_string(const DxResources *res, uint32_t id,
+                                      const DxDeviceConfig *dev) {
+    if (!res) return NULL;
+    if (!dev) return dx_resources_get_string_by_id(res, id);
+
+    const DxResourceEntry *best = pick_best_entry(res, id, dev);
+    if (best && best->value_type == RES_VALUE_TYPE_STRING) {
+        return best->str_val;
+    }
+    // Fallback: try legacy string entries (no config info on those)
+    return dx_resources_get_string(res, id);
 }
 
 const char *dx_resources_get_string_by_id(const DxResources *res, uint32_t id) {

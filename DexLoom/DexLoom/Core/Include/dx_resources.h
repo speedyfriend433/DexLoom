@@ -6,6 +6,54 @@
 // Forward declaration
 typedef struct DxStyleRecord DxStyleRecord;
 
+// ============================================================
+// Resource qualifier configuration (ResTable_config)
+// ============================================================
+
+// Screen orientation constants
+#define DX_ORIENTATION_ANY       0
+#define DX_SCREEN_ORIENT_PORT    1
+#define DX_SCREEN_ORIENT_LAND    2
+
+// Well-known density values
+#define DX_DENSITY_DEFAULT       0
+#define DX_DENSITY_LDPI        120
+#define DX_DENSITY_MDPI        160
+#define DX_DENSITY_HDPI        240
+#define DX_DENSITY_XHDPI       320
+#define DX_DENSITY_XXHDPI      480
+#define DX_DENSITY_XXXHDPI     640
+#define DX_DENSITY_NODPI       0xFFFE
+#define DX_DENSITY_ANYDPI      0xFFFE
+
+// Parsed resource configuration qualifiers (from ResTable_config in resources.arsc)
+typedef struct {
+    char     language[2];     // ISO 639-1 language code (e.g., "en")
+    char     country[2];      // ISO 3166-1 country code (e.g., "US")
+    uint16_t density;         // screen density (dpi): 160=mdpi, 240=hdpi, etc.
+    uint16_t sdk_version;     // minSdkVersion for this config
+    uint16_t screen_width;    // screen width in dp (0 = any)
+    uint16_t screen_height;   // screen height in dp (0 = any)
+    uint8_t  orientation;     // 0=any, 1=port, 2=land
+    uint8_t  screen_layout;   // screen size + long flags
+    uint8_t  ui_mode;         // night mode + type
+    uint16_t smallest_screen_width_dp; // sw<N>dp qualifier
+} DxResConfig;
+
+// Device configuration for qualifier matching
+typedef struct {
+    char     language[3];     // e.g., "en" (null-terminated)
+    char     country[3];      // e.g., "US" (null-terminated)
+    uint16_t density;         // screen density in dpi (e.g., 440 for iPhone)
+    uint16_t sdk_version;     // emulated Android SDK version (e.g., 33)
+    uint16_t screen_width;    // screen width in dp
+    uint16_t screen_height;   // screen height in dp
+    uint8_t  orientation;     // 1=portrait, 2=landscape
+} DxDeviceConfig;
+
+// Initialize a device config with iPhone defaults
+void dx_device_config_init(DxDeviceConfig *cfg);
+
 // Resource value types (from Android's ResourceTypes.h)
 typedef enum {
     DX_RES_TYPE_NULL     = 0,
@@ -51,6 +99,7 @@ typedef struct {
     };
     char *entry_name;        // key name, e.g., "app_name", "main_layout"
     char *type_name;         // type name, e.g., "string", "layout", "color"
+    DxResConfig config;      // qualifier config for this entry
 } DxResourceEntry;
 
 // Parsed resources.arsc data
@@ -104,6 +153,14 @@ const char *dx_resources_get_string_by_id(const DxResources *res, uint32_t id);
 const DxResourceEntry *dx_resources_find_by_name(const DxResources *res,
                                                    const char *type_name,
                                                    const char *entry_name);
+
+// Qualifier-aware resource lookup: picks the best-matching entry for the device config
+const DxResourceEntry *dx_resources_find_by_id_q(const DxResources *res, uint32_t id,
+                                                   const DxDeviceConfig *dev);
+
+// Qualifier-aware string lookup: prefers locale-matched strings
+const char *dx_resources_find_string(const DxResources *res, uint32_t id,
+                                      const DxDeviceConfig *dev);
 
 // Decode a dimension value to a float in the given unit
 float dx_resources_decode_dimen(uint32_t raw_data, uint8_t *out_unit);

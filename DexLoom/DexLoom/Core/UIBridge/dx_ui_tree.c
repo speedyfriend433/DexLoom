@@ -112,6 +112,12 @@ void dx_ui_node_destroy(DxUINode *node) {
     dx_free(node->image_data);
     dx_free(node->web_url);
     dx_free(node->web_html);
+    if (node->draw_commands) {
+        for (uint32_t i = 0; i < node->draw_cmd_count; i++) {
+            dx_free(node->draw_commands[i].text);
+        }
+        dx_free(node->draw_commands);
+    }
     dx_free(node);
 }
 
@@ -346,6 +352,26 @@ static DxRenderNode *serialize_node(DxUINode *node) {
     rn->web_url = node->web_url ? dx_strdup(node->web_url) : NULL;
     rn->web_html = node->web_html ? dx_strdup(node->web_html) : NULL;
 
+    // Copy draw commands
+    if (node->draw_cmd_count > 0 && node->draw_commands) {
+        rn->draw_cmd_count = node->draw_cmd_count;
+        rn->draw_commands = (DxDrawCommand *)dx_malloc(sizeof(DxDrawCommand) * node->draw_cmd_count);
+        if (rn->draw_commands) {
+            memcpy(rn->draw_commands, node->draw_commands, sizeof(DxDrawCommand) * node->draw_cmd_count);
+            // Deep-copy text strings
+            for (uint32_t i = 0; i < rn->draw_cmd_count; i++) {
+                if (rn->draw_commands[i].text) {
+                    rn->draw_commands[i].text = dx_strdup(rn->draw_commands[i].text);
+                }
+            }
+        } else {
+            rn->draw_cmd_count = 0;
+        }
+    } else {
+        rn->draw_commands = NULL;
+        rn->draw_cmd_count = 0;
+    }
+
     if (node->child_count > 0) {
         rn->children = (DxRenderNode *)dx_malloc(sizeof(DxRenderNode) * node->child_count);
         rn->child_count = node->child_count;
@@ -381,6 +407,12 @@ static void free_render_node(DxRenderNode *node) {
     dx_free(node->hint);
     dx_free(node->web_url);
     dx_free(node->web_html);
+    if (node->draw_commands) {
+        for (uint32_t i = 0; i < node->draw_cmd_count; i++) {
+            dx_free(node->draw_commands[i].text);
+        }
+        dx_free(node->draw_commands);
+    }
     for (uint32_t i = 0; i < node->child_count; i++) {
         free_render_node(&node->children[i]);
     }

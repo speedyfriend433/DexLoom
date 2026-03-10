@@ -259,6 +259,7 @@ const char *dx_vm_get_string_value(DxObject *str_obj);
 // Method resolution
 DxMethod *dx_vm_resolve_method(DxVM *vm, uint32_t dex_method_idx);
 DxMethod *dx_vm_find_method(DxClass *cls, const char *name, const char *shorty);
+DxMethod *dx_vm_find_interface_method(DxVM *vm, DxClass *cls, const char *name, const char *shorty);
 
 // Frame pool
 DxFrame *dx_vm_alloc_frame(DxVM *vm);
@@ -271,5 +272,12 @@ DxResult dx_vm_run_main_activity(DxVM *vm, const char *activity_class);
 // Diagnostics
 char *dx_vm_heap_stats(DxVM *vm);
 char *dx_vm_get_last_error_detail(DxVM *vm);
+
+// Crash isolation (signal-based recovery)
+#include <setjmp.h>
+void        dx_crash_install_handlers(DxVM *vm);
+void        dx_crash_uninstall_handlers(void);
+int         dx_crash_get_signal(void);
+sigjmp_buf *dx_crash_get_jmpbuf(void);
 
 #endif // DX_VM_H

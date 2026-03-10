@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <setjmp.h>
 
 #define TAG "Runtime"
 
@@ -463,7 +464,23 @@ DxResult dx_runtime_run(DxContext *ctx) {
     DX_INFO(TAG, "Starting main activity: %s", ctx->main_activity_class);
     ctx->running = true;
 
-    return dx_vm_run_main_activity(ctx->vm, ctx->main_activity_class);
+    // Install crash isolation handlers around interpreter execution
+    dx_crash_install_handlers(ctx->vm);
+
+    int sig = sigsetjmp(*dx_crash_get_jmpbuf(), 1);
+    if (sig != 0) {
+        // Recovered from a signal — clean up and report
+        DX_ERROR(TAG, "Recovered from signal %d (%s) during execution",
+                 sig, sig == 11 ? "SIGSEGV" : sig == 10 ? "SIGBUS" : "unknown");
+        dx_crash_uninstall_handlers();
+        ctx->running = false;
+        return DX_ERR_SIGNAL;
+    }
+
+    DxResult res = dx_vm_run_main_activity(ctx->vm, ctx->main_activity_class);
+
+    dx_crash_uninstall_handlers();
+    return res;
 }
 
 DxResult dx_vm_run_main_activity(DxVM *vm, const char *activity_class) {
@@ -498,7 +515,7 @@ DxResult dx_vm_run_main_activity(DxVM *vm, const char *activity_class) {
             DX_WARN("Activity", "Activity.<init> threw uncaught %s (absorbed)", exc_desc);
             vm->pending_exception = NULL;
             res = DX_OK;
-        } else if (res == DX_ERR_STACK_OVERFLOW || res == DX_ERR_INTERNAL) {
+        } else if (res == DX_ERR_STACK_OVERFLOW || res == DX_ERR_INTERNAL || res == DX_ERR_BUDGET_EXHAUSTED || res == DX_ERR_SIGNAL) {
             DX_ERROR("Activity", "Activity.<init> failed fatally: %s", dx_result_string(res));
             return res;
         } else if (res != DX_OK) {
@@ -520,7 +537,7 @@ DxResult dx_vm_run_main_activity(DxVM *vm, const char *activity_class) {
             DX_WARN("Activity", "onCreate threw uncaught %s (absorbed)", exc_desc);
             vm->pending_exception = NULL;
             res = DX_OK;
-        } else if (res == DX_ERR_STACK_OVERFLOW || res == DX_ERR_INTERNAL) {
+        } else if (res == DX_ERR_STACK_OVERFLOW || res == DX_ERR_INTERNAL || res == DX_ERR_BUDGET_EXHAUSTED || res == DX_ERR_SIGNAL) {
             DX_ERROR("Activity", "onCreate failed fatally: %s", dx_result_string(res));
             return res;
         } else if (res != DX_OK) {
@@ -544,7 +561,7 @@ DxResult dx_vm_run_main_activity(DxVM *vm, const char *activity_class) {
                     ? vm->pending_exception->klass->descriptor : "unknown");
             vm->pending_exception = NULL;
             res = DX_OK;
-        } else if (res == DX_ERR_STACK_OVERFLOW || res == DX_ERR_INTERNAL) {
+        } else if (res == DX_ERR_STACK_OVERFLOW || res == DX_ERR_INTERNAL || res == DX_ERR_BUDGET_EXHAUSTED || res == DX_ERR_SIGNAL) {
             DX_ERROR("Activity", "onPostCreate failed fatally: %s", dx_result_string(res));
             return res;
         }
@@ -564,7 +581,7 @@ DxResult dx_vm_run_main_activity(DxVM *vm, const char *activity_class) {
                     ? vm->pending_exception->klass->descriptor : "unknown");
             vm->pending_exception = NULL;
             res = DX_OK;
-        } else if (res == DX_ERR_STACK_OVERFLOW || res == DX_ERR_INTERNAL) {
+        } else if (res == DX_ERR_STACK_OVERFLOW || res == DX_ERR_INTERNAL || res == DX_ERR_BUDGET_EXHAUSTED || res == DX_ERR_SIGNAL) {
             DX_ERROR("Activity", "onStart failed fatally: %s", dx_result_string(res));
             return res;
         }
@@ -584,7 +601,7 @@ DxResult dx_vm_run_main_activity(DxVM *vm, const char *activity_class) {
                     ? vm->pending_exception->klass->descriptor : "unknown");
             vm->pending_exception = NULL;
             res = DX_OK;
-        } else if (res == DX_ERR_STACK_OVERFLOW || res == DX_ERR_INTERNAL) {
+        } else if (res == DX_ERR_STACK_OVERFLOW || res == DX_ERR_INTERNAL || res == DX_ERR_BUDGET_EXHAUSTED || res == DX_ERR_SIGNAL) {
             DX_ERROR("Activity", "onResume failed fatally: %s", dx_result_string(res));
             return res;
         }
@@ -603,7 +620,7 @@ DxResult dx_vm_run_main_activity(DxVM *vm, const char *activity_class) {
                     ? vm->pending_exception->klass->descriptor : "unknown");
             vm->pending_exception = NULL;
             res = DX_OK;
-        } else if (res == DX_ERR_STACK_OVERFLOW || res == DX_ERR_INTERNAL) {
+        } else if (res == DX_ERR_STACK_OVERFLOW || res == DX_ERR_INTERNAL || res == DX_ERR_BUDGET_EXHAUSTED || res == DX_ERR_SIGNAL) {
             DX_ERROR("Activity", "onPostResume failed fatally: %s", dx_result_string(res));
             return res;
         }

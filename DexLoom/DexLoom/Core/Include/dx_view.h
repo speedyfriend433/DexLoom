@@ -21,6 +21,34 @@
 #define DX_CONSTRAINT_NONE   0
 #define DX_CONSTRAINT_PARENT 0xFFFFFFFF
 
+// Canvas draw command types
+typedef enum {
+    DX_DRAW_RECT = 0,
+    DX_DRAW_CIRCLE,
+    DX_DRAW_LINE,
+    DX_DRAW_TEXT,
+    DX_DRAW_ROUND_RECT,
+    DX_DRAW_COLOR,
+    DX_DRAW_SAVE,
+    DX_DRAW_RESTORE,
+    DX_DRAW_TRANSLATE,
+    DX_DRAW_ROTATE,
+    DX_DRAW_SCALE,
+} DxDrawCmdType;
+
+// A single recorded Canvas draw command
+typedef struct {
+    DxDrawCmdType type;
+    float         params[6];    // up to 6 float params (left,top,right,bottom,rx,ry etc.)
+    uint32_t      color;        // ARGB paint color
+    float         stroke_width; // paint stroke width
+    int32_t       paint_style;  // 0=FILL, 1=STROKE, 2=FILL_AND_STROKE
+    float         text_size;    // paint text size (for drawText)
+    char         *text;         // text string (for drawText, owned)
+} DxDrawCommand;
+
+#define DX_MAX_DRAW_COMMANDS 256
+
 // ConstraintLayout constraint anchors stored per child node
 typedef struct DxConstraints {
     uint32_t left_to_left;     // view ID or DX_CONSTRAINT_PARENT
@@ -92,6 +120,11 @@ struct DxUINode {
     // Back-reference to runtime object
     DxObject    *runtime_obj;
 
+    // Canvas draw commands (populated by View.onDraw dispatch)
+    DxDrawCommand *draw_commands;
+    uint32_t       draw_cmd_count;
+    uint32_t       draw_cmd_capacity;
+
     // Tree structure
     DxUINode    *parent;
     DxUINode   **children;
@@ -136,6 +169,10 @@ typedef struct DxRenderNode {
     // WebView data
     char        *web_url;          // URL to load (owned copy)
     char        *web_html;         // HTML content to load (owned copy)
+
+    // Canvas draw commands (owned copies)
+    DxDrawCommand *draw_commands;
+    uint32_t       draw_cmd_count;
 
     struct DxRenderNode *children;
     uint32_t     child_count;

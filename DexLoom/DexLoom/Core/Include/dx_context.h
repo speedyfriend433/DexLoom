@@ -27,6 +27,9 @@ struct DxContext {
     uint32_t     theme_res_id;    // style resource ID (0 = none)
     DxTheme     *theme;           // resolved theme bag (NULL = none)
 
+    // Device configuration for resource qualifier matching
+    DxDeviceConfig device_config;
+
     // Resource tables
     char        **string_resources;   // indexed by resource ID offset
     uint32_t    string_resource_count;

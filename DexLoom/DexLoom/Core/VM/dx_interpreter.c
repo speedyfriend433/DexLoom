@@ -290,6 +290,31 @@ static DxResult handle_invoke(DxVM *vm, DxFrame *frame, const uint16_t *code,
         }
     }
 
+    // For invoke-interface, dispatch on the receiver's actual class.
+    // 1) Check if the concrete class (or its parents) overrides the method
+    // 2) If not found, search implemented interfaces for a default method
+    if (opcode == 0x72 && argc > 0) {
+        DxValue recv_val = frame->registers[arg_regs[0]];
+        if (recv_val.tag == DX_VAL_OBJ && recv_val.obj && recv_val.obj->klass) {
+            DxClass *recv_cls = recv_val.obj->klass;
+            // Try the receiver's class hierarchy first (concrete override)
+            DxMethod *override = dx_vm_find_method(recv_cls, target->name, target->shorty);
+            if (override) {
+                target = override;
+            } else {
+                // Fall back to interface default method search
+                DxMethod *iface_default = dx_vm_find_interface_method(vm, recv_cls,
+                                                                        target->name, target->shorty);
+                if (iface_default) target = iface_default;
+            }
+        }
+        // If target is a bridge method, try to find the non-bridge version
+        if ((target->access_flags & DX_ACC_BRIDGE) && target->declaring_class) {
+            DxMethod *real = dx_vm_find_method(target->declaring_class, target->name, target->shorty);
+            if (real && !(real->access_flags & DX_ACC_BRIDGE)) target = real;
+        }
+    }
+
     // For invoke-super, resolve on the declaring class's super (Dalvik semantics)
     if (opcode == 0x6F && argc > 0) {
         DxClass *declaring = target->declaring_class;
@@ -422,6 +447,27 @@ static DxResult handle_invoke_range(DxVM *vm, DxFrame *frame, const uint16_t *co
                 DxMethod *vt = receiver->klass->vtable[target->vtable_idx];
                 if (vt) target = vt;
             }
+        }
+    }
+
+    // invoke-interface/range: dispatch on receiver's actual class + interface defaults
+    if (opcode == 0x78 && argc > 0) {
+        DxValue recv_val = frame->registers[first_reg];
+        if (recv_val.tag == DX_VAL_OBJ && recv_val.obj && recv_val.obj->klass) {
+            DxClass *recv_cls = recv_val.obj->klass;
+            DxMethod *override = dx_vm_find_method(recv_cls, target->name, target->shorty);
+            if (override) {
+                target = override;
+            } else {
+                DxMethod *iface_default = dx_vm_find_interface_method(vm, recv_cls,
+                                                                        target->name, target->shorty);
+                if (iface_default) target = iface_default;
+            }
+        }
+        // Bridge method unwrap
+        if ((target->access_flags & DX_ACC_BRIDGE) && target->declaring_class) {
+            DxMethod *real = dx_vm_find_method(target->declaring_class, target->name, target->shorty);
+            if (real && !(real->access_flags & DX_ACC_BRIDGE)) target = real;
         }
     }
 
@@ -724,6 +770,29 @@ DxResult dx_vm_execute_method(DxVM *vm, DxMethod *method, DxValue *args,
     DxResult exec_result = DX_OK;
     uint32_t null_access_count = 0;  // total iget/iput on null counter (not reset)
 
+    // Register bounds checking macro: validates register index against declared count.
+    // On violation, captures diagnostic and aborts the method with VERIFICATION_FAILED.
+    #define CHECK_REG(idx) do { \
+        if ((uint32_t)(idx) >= regs) { \
+            DX_ERROR(TAG, "Register v%u out of bounds (registers_size=%u) at pc=%u in %s.%s op=0x%02x", \
+                     (uint32_t)(idx), (uint32_t)regs, pc, \
+                     method->declaring_class ? method->declaring_class->descriptor : "?", \
+                     method->name ? method->name : "?", opcode); \
+            snprintf(vm->error_msg, sizeof(vm->error_msg), \
+                     "Register v%u out of bounds (max v%u) at pc=%u in %s.%s", \
+                     (uint32_t)(idx), (uint32_t)(regs - 1), pc, \
+                     method->declaring_class ? method->declaring_class->descriptor : "?", \
+                     method->name ? method->name : "?"); \
+            exec_result = DX_ERR_VERIFICATION_FAILED; \
+            goto done; \
+        } \
+    } while (0)
+
+    // Instruction trace ring buffer for watchdog diagnostics
+    #define INSN_TRACE_SIZE 16
+    struct { uint32_t pc; uint8_t opcode; } insn_trace[INSN_TRACE_SIZE];
+    uint32_t insn_trace_idx = 0;
+
     // Macro for safe code access with bounds check
     #define CODE_AT(off) ((pc + (off)) < code_size ? code[pc + (off)] : 0)
 
@@ -732,14 +801,40 @@ DxResult dx_vm_execute_method(DxVM *vm, DxMethod *method, DxValue *args,
         // Enforce global instruction limit to prevent runaway execution
         vm->insn_count++;
         vm->insn_total++;
+
+        // Record instruction in trace ring buffer
+        insn_trace[insn_trace_idx % INSN_TRACE_SIZE].pc = pc;
+        insn_trace[insn_trace_idx % INSN_TRACE_SIZE].opcode = code[pc] & 0xFF;
+        insn_trace_idx++;
+
         if (vm->insn_limit > 0 && vm->insn_count > vm->insn_limit) {
-            DX_WARN(TAG, "Instruction budget exhausted (%llu) in %s.%s - aborting call",
-                     vm->insn_limit,
-                     method->declaring_class ? method->declaring_class->descriptor : "?",
-                     method->name);
-            // Non-fatal: return null result so other top-level calls can proceed
+            const char *cls_desc = method->declaring_class ? method->declaring_class->descriptor : "?";
+            const char *mth_name = method->name ? method->name : "?";
+
+            // Build a trace of the last N instructions for debugging
+            char trace_buf[512];
+            int tpos = 0;
+            tpos += snprintf(trace_buf + tpos, sizeof(trace_buf) - tpos,
+                             "Last %d instructions before budget exhaustion:\n", INSN_TRACE_SIZE);
+            uint32_t start = insn_trace_idx >= INSN_TRACE_SIZE ? insn_trace_idx - INSN_TRACE_SIZE : 0;
+            for (uint32_t ti = start; ti < insn_trace_idx && tpos < (int)sizeof(trace_buf) - 60; ti++) {
+                uint32_t slot = ti % INSN_TRACE_SIZE;
+                tpos += snprintf(trace_buf + tpos, sizeof(trace_buf) - tpos,
+                                 "  pc=%u op=0x%02x (%s)\n",
+                                 insn_trace[slot].pc, insn_trace[slot].opcode,
+                                 dx_opcode_name(insn_trace[slot].opcode));
+            }
+
+            DX_WARN(TAG, "Instruction budget exhausted (%llu) in %s.%s at pc=%u - probable infinite loop",
+                     vm->insn_limit, cls_desc, mth_name, pc);
+            DX_WARN(TAG, "%s", trace_buf);
+
+            snprintf(vm->error_msg, sizeof(vm->error_msg),
+                     "Instruction budget exhausted (%llu insns) in %s.%s at pc=%u — probable infinite loop",
+                     vm->insn_limit, cls_desc, mth_name, pc);
+
+            exec_result = DX_ERR_BUDGET_EXHAUSTED;
             if (result) *result = DX_NULL_VALUE;
-            exec_result = DX_OK;
             goto done;
         }
 
@@ -757,6 +852,7 @@ DxResult dx_vm_execute_method(DxVM *vm, DxMethod *method, DxValue *args,
         case 0x01: { // move vA, vB (12x)
             uint8_t dst = (inst >> 8) & 0x0F;
             uint8_t src = (inst >> 12) & 0x0F;
+            CHECK_REG(dst); CHECK_REG(src);
             frame->registers[dst] = frame->registers[src];
             pc += 1;
             break;
@@ -817,6 +913,7 @@ DxResult dx_vm_execute_method(DxVM *vm, DxMethod *method, DxValue *args,
         case 0x07: { // move-object vA, vB (12x)
             uint8_t dst = (inst >> 8) & 0x0F;
             uint8_t src = (inst >> 12) & 0x0F;
+            CHECK_REG(dst); CHECK_REG(src);
             frame->registers[dst] = frame->registers[src];
             pc += 1;
             break;
@@ -1475,6 +1572,7 @@ DxResult dx_vm_execute_method(DxVM *vm, DxMethod *method, DxValue *args,
             uint8_t dst = (inst >> 8) & 0xFF;
             uint8_t arr_reg = code[pc + 1] & 0xFF;
             uint8_t idx_reg = (code[pc + 1] >> 8) & 0xFF;
+            CHECK_REG(dst); CHECK_REG(arr_reg); CHECK_REG(idx_reg);
             DxObject *arr = (frame->registers[arr_reg].tag == DX_VAL_OBJ) ? frame->registers[arr_reg].obj : NULL;
             int32_t index = frame->registers[idx_reg].i;
             if (!arr) {
@@ -1515,6 +1613,7 @@ DxResult dx_vm_execute_method(DxVM *vm, DxMethod *method, DxValue *args,
             uint8_t src = (inst >> 8) & 0xFF;
             uint8_t arr_reg = code[pc + 1] & 0xFF;
             uint8_t idx_reg = (code[pc + 1] >> 8) & 0xFF;
+            CHECK_REG(src); CHECK_REG(arr_reg); CHECK_REG(idx_reg);
             DxObject *arr = (frame->registers[arr_reg].tag == DX_VAL_OBJ) ? frame->registers[arr_reg].obj : NULL;
             int32_t index = frame->registers[idx_reg].i;
             if (!arr) {
@@ -1550,6 +1649,7 @@ DxResult dx_vm_execute_method(DxVM *vm, DxMethod *method, DxValue *args,
             uint8_t dst = (inst >> 8) & 0x0F;
             uint8_t obj_reg = (inst >> 12) & 0x0F;
             uint16_t field_idx = code[pc + 1];
+            CHECK_REG(dst); CHECK_REG(obj_reg);
 
             DxValue obj_val = frame->registers[obj_reg];
             DxObject *obj = (obj_val.tag == DX_VAL_OBJ) ? obj_val.obj : NULL;
@@ -1604,6 +1704,7 @@ DxResult dx_vm_execute_method(DxVM *vm, DxMethod *method, DxValue *args,
             uint8_t src = (inst >> 8) & 0x0F;
             uint8_t obj_reg = (inst >> 12) & 0x0F;
             uint16_t field_idx = code[pc + 1];
+            CHECK_REG(src); CHECK_REG(obj_reg);
 
             DxValue obj_val = frame->registers[obj_reg];
             DxObject *obj = (obj_val.tag == DX_VAL_OBJ) ? obj_val.obj : NULL;
@@ -2187,10 +2288,14 @@ DxResult dx_vm_execute_method(DxVM *vm, DxMethod *method, DxValue *args,
         }
 
         default: {
+            const char *op_name = dx_opcode_name(opcode);
+            const char *cls_desc = method->declaring_class ? method->declaring_class->descriptor : "?";
+            const char *mth_name = method->name ? method->name : "?";
             DX_WARN(TAG, "Unsupported opcode 0x%02x (%s) at pc=%u in %s.%s - skipping",
-                     opcode, dx_opcode_name(opcode), pc,
-                     method->declaring_class ? method->declaring_class->descriptor : "?",
-                     method->name);
+                     opcode, op_name, pc, cls_desc, mth_name);
+            snprintf(vm->error_msg, sizeof(vm->error_msg),
+                     "Unsupported feature: opcode 0x%02x (%s) at pc=%u in %s.%s",
+                     opcode, op_name, pc, cls_desc, mth_name);
             // Skip by instruction width instead of failing
             uint32_t width = dx_opcode_width(opcode);
             pc += width;
@@ -2201,6 +2306,8 @@ DxResult dx_vm_execute_method(DxVM *vm, DxMethod *method, DxValue *args,
 
 done:
     #undef CODE_AT
+    #undef CHECK_REG
+    #undef INSN_TRACE_SIZE
 
     // Before leaving the method on an exception path, check if the current PC
     // falls inside a try block with a catch-all (finally) handler that wasn't

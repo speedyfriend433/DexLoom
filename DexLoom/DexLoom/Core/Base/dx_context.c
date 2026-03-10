@@ -19,6 +19,10 @@ DxContext *dx_context_create(void) {
     if (!ctx) return NULL;
 
     dx_log_init();
+
+    // Initialize device configuration with iPhone defaults
+    dx_device_config_init(&ctx->device_config);
+
     DX_INFO(TAG, "DexLoom runtime context created");
     return ctx;
 }

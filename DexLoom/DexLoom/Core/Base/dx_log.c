@@ -63,6 +63,8 @@ const char *dx_result_string(DxResult result) {
         case DX_ERR_AXML_INVALID:       return "AXML_INVALID";
         case DX_ERR_UNSUPPORTED_VERSION:return "UNSUPPORTED_VERSION";
         case DX_ERR_INTERNAL:           return "INTERNAL_ERROR";
+        case DX_ERR_SIGNAL:            return "SIGNAL_CRASH";
+        case DX_ERR_BUDGET_EXHAUSTED:  return "BUDGET_EXHAUSTED";
     }
     return "UNKNOWN";
 }
