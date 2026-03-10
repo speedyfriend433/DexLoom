@@ -40,7 +40,9 @@ struct RuntimeView: View {
                             .font(.dxBody)
                             .foregroundStyle(Color.dxTextSecondary)
                         Button("Run Activity") {
-                            bridge.run()
+                            Task { @MainActor in
+                                bridge.run()
+                            }
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(Color.dxPrimary)
@@ -303,7 +305,9 @@ struct AndroidViewRenderer: View {
         case DX_VIEW_FAB:
             // FloatingActionButton — circular button
             Button {
-                bridge.dispatchClick(viewId: node.viewId)
+                Task { @MainActor in
+                    bridge.dispatchClick(viewId: node.viewId)
+                }
             } label: {
                 Image(systemName: "plus")
                     .font(.title2)
@@ -346,7 +350,9 @@ struct AndroidViewRenderer: View {
 
     private var buttonView: some View {
         Button {
-            bridge.dispatchClick(viewId: node.viewId)
+            Task { @MainActor in
+                bridge.dispatchClick(viewId: node.viewId)
+            }
         } label: {
             Text(node.text ?? "Button")
                 .font(.system(size: max(sp(node.textSize), 1)))
@@ -692,7 +698,9 @@ extension View {
         if hasListener {
             self.contentShape(Rectangle())
                 .onTapGesture {
-                    bridge.dispatchClick(viewId: viewId)
+                    Task { @MainActor in
+                        bridge.dispatchClick(viewId: viewId)
+                    }
                 }
         } else {
             self
@@ -703,7 +711,9 @@ extension View {
     fileprivate func applyLongPressGesture(hasListener: Bool, viewId: UInt32, bridge: RuntimeBridge) -> some View {
         if hasListener {
             self.onLongPressGesture {
-                bridge.dispatchLongClick(viewId: viewId)
+                Task { @MainActor in
+                    bridge.dispatchLongClick(viewId: viewId)
+                }
             }
         } else {
             self
@@ -728,7 +738,9 @@ private struct SwipeRefreshContainerView: View {
         }
         .refreshable {
             isRefreshing = true
-            bridge.dispatchRefresh(viewId: node.viewId)
+            await MainActor.run {
+                bridge.dispatchRefresh(viewId: node.viewId)
+            }
             // Brief delay so the spinner is visible
             try? await Task.sleep(nanoseconds: 500_000_000)
             isRefreshing = false
@@ -1033,7 +1045,9 @@ private struct EditTextFieldView: View {
             .focused($isFocused)
             .onAppear { text = initialText }
             .onChange(of: text) { _, newValue in
-                bridge.updateEditText(viewId: viewId, text: newValue)
+                Task { @MainActor in
+                    bridge.updateEditText(viewId: viewId, text: newValue)
+                }
             }
     }
 }

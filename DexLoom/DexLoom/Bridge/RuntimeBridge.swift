@@ -184,10 +184,10 @@ final class RuntimeBridge: ObservableObject {
         ctx.pointee.ui_callback_data = bridge
 
         // Load APK on background thread
-        Task.detached { [weak self] in
+        Task.detached {
             let result = dx_context_load_apk(ctx, path)
 
-            await MainActor.run {
+            await MainActor.run { [weak self] in
                 guard let self = self else { return }
                 if result == DX_OK {
                     self.isLoaded = true
@@ -218,10 +218,10 @@ final class RuntimeBridge: ObservableObject {
         isRunning = true  // set immediately to prevent multiple taps
         addLog(level: "INFO", tag: "Bridge", message: "Starting runtime execution")
 
-        Task.detached { [weak self] in
+        Task.detached {
             let result = dx_context_run(ctx)
 
-            await MainActor.run {
+            await MainActor.run { [weak self] in
                 guard let self = self else { return }
                 if result == DX_OK {
                     self.addLog(level: "INFO", tag: "Bridge", message: "Runtime started successfully")
@@ -263,10 +263,10 @@ final class RuntimeBridge: ObservableObject {
         guard let ctx = context else { return }
         addLog(level: "DEBUG", tag: "Bridge", message: "Click on view 0x\(String(viewId, radix: 16))")
 
-        Task.detached { [weak self] in
+        Task.detached {
             let result = dx_runtime_dispatch_click(ctx, viewId)
 
-            await MainActor.run {
+            await MainActor.run { [weak self] in
                 guard let self = self else { return }
                 if result != DX_OK {
                     let errStr = String(cString: dx_result_string(result))
@@ -284,10 +284,10 @@ final class RuntimeBridge: ObservableObject {
         guard let ctx = context else { return }
         addLog(level: "DEBUG", tag: "Bridge", message: "Long-click on view 0x\(String(viewId, radix: 16))")
 
-        Task.detached { [weak self] in
+        Task.detached {
             let result = dx_runtime_dispatch_long_click(ctx, viewId)
 
-            await MainActor.run {
+            await MainActor.run { [weak self] in
                 guard let self = self else { return }
                 if result != DX_OK {
                     let errStr = String(cString: dx_result_string(result))
@@ -305,10 +305,10 @@ final class RuntimeBridge: ObservableObject {
         guard let ctx = context else { return }
         addLog(level: "DEBUG", tag: "Bridge", message: "Refresh on view 0x\(String(viewId, radix: 16))")
 
-        Task.detached { [weak self] in
+        Task.detached {
             let result = dx_runtime_dispatch_refresh(ctx, viewId)
 
-            await MainActor.run {
+            await MainActor.run { [weak self] in
                 guard let self = self else { return }
                 if result != DX_OK {
                     let errStr = String(cString: dx_result_string(result))
@@ -333,10 +333,10 @@ final class RuntimeBridge: ObservableObject {
         guard let ctx = context else { return }
         addLog(level: "DEBUG", tag: "Bridge", message: "Back button pressed")
 
-        Task.detached { [weak self] in
+        Task.detached {
             let result = dx_runtime_dispatch_back(ctx)
 
-            await MainActor.run {
+            await MainActor.run { [weak self] in
                 guard let self = self else { return }
                 if result != DX_OK {
                     let errStr = String(cString: dx_result_string(result))

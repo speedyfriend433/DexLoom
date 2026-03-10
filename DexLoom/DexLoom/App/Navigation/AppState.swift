@@ -15,8 +15,7 @@ enum AppTab: String, CaseIterable {
 }
 
 @MainActor
-@Observable
-final class AppState {
-    var selectedTab: AppTab = .home
-    var bridge = RuntimeBridge()
+final class AppState: ObservableObject {
+    @Published var selectedTab: AppTab = .home
+    let bridge = RuntimeBridge()
 }

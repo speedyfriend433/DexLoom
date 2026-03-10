@@ -304,17 +304,23 @@ static DxResult parse_string_pool(const uint8_t *data, uint32_t size, uint32_t p
 
 // Decode Android's dimension value format
 float dx_resources_decode_dimen(uint32_t raw_data, uint8_t *out_unit) {
-    // Low 4 bits = unit, next 4 bits = radix, top 24 bits = mantissa
+    // Android complex dimension format (TypedValue):
+    // bits 0..3   = unit
+    // bits 4..5   = radix
+    // bits 8..31  = signed 24-bit mantissa
     uint8_t unit = raw_data & 0x0F;
     uint8_t radix = (raw_data >> 4) & 0x03;
-    int32_t mantissa = (int32_t)(raw_data & 0xFFFFFF00);
+    // Keep mantissa in-place (bits 8..31), matching Android TypedValue.complexToFloat.
+    // Casting to signed int preserves negative values when high bit is set.
+    int32_t mantissa = (int32_t)(raw_data & 0xFFFFFF00u);
 
-    // Android uses fixed-point with different radix positions
+    // Matches Android TypedValue.complexToFloat():
+    // value = mantissa * RADIX_MULTS[radix]
     static const float radix_mults[] = {
-        1.0f / (1 << 0),   // 23p0
-        1.0f / (1 << 7),   // 16p7
-        1.0f / (1 << 15),  // 8p15
-        1.0f / (1 << 23),  // 0p23
+        1.0f / 256.0f,         // 23p0
+        1.0f / 32768.0f,       // 16p7
+        1.0f / 8388608.0f,     // 8p15
+        1.0f / 2147483648.0f,  // 0p23
     };
 
     float value = (float)mantissa * radix_mults[radix];

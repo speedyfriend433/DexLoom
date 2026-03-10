@@ -1,4 +1,4 @@
-import Testing
+import XCTest
 import Foundation
 @testable import DexLoom
 
@@ -21,28 +21,21 @@ private func teardownVM(_ ctx: UnsafeMutablePointer<DxContext>, _ vm: UnsafeMuta
 // MARK: - Existing Core Tests
 // ============================================================
 
-@Suite("DexLoom Core Tests")
-struct DexLoomCoreTests {
-
-    @Test("Runtime context creation and destruction")
+final class DexLoomCoreTests: XCTestCase {
     func testContextLifecycle() {
         let ctx = dx_context_create()
-        #expect(ctx != nil)
+        XCTAssertTrue(ctx != nil)
         if let ctx = ctx {
             dx_context_destroy(ctx)
         }
     }
-
-    @Test("DEX magic validation rejects invalid data")
     func testDexMagicValidation() {
         // Must be >= header size (112) but with bad magic
         var bad_data = [UInt8](repeating: 0, count: 112)
         var dex: UnsafeMutablePointer<DxDexFile>?
         let result = dx_dex_parse(&bad_data, UInt32(bad_data.count), &dex)
-        #expect(result == DX_ERR_INVALID_MAGIC)
+        XCTAssertTrue(result == DX_ERR_INVALID_MAGIC)
     }
-
-    @Test("DEX header parsing with valid minimal header")
     func testDexHeaderParsing() {
         var data = [UInt8](repeating: 0, count: 112)
         let magic: [UInt8] = [0x64, 0x65, 0x78, 0x0A, 0x30, 0x33, 0x35, 0x00]
@@ -53,36 +46,28 @@ struct DexLoomCoreTests {
 
         var dex: UnsafeMutablePointer<DxDexFile>?
         let result = dx_dex_parse(&data, UInt32(data.count), &dex)
-        #expect(result == DX_OK)
+        XCTAssertTrue(result == DX_OK)
         if let dex = dex {
-            #expect(dex.pointee.header.header_size == 112)
+            XCTAssertTrue(dex.pointee.header.header_size == 112)
             dx_dex_free(dex)
         }
     }
-
-    @Test("Log system does not crash")
     func testLogInit() {
         dx_log_init()
         dx_log_msg(DX_LOG_INFO, "Test", "Hello from test")
     }
-
-    @Test("Result string conversion")
     func testResultStrings() {
         let ok = String(cString: dx_result_string(DX_OK))
-        #expect(ok == "OK")
+        XCTAssertTrue(ok == "OK")
         let notFound = String(cString: dx_result_string(DX_ERR_NOT_FOUND))
-        #expect(notFound == "NOT_FOUND")
+        XCTAssertTrue(notFound == "NOT_FOUND")
     }
-
-    @Test("Opcode name lookup")
     func testOpcodeNames() {
         let nop = String(cString: dx_opcode_name(0x00))
-        #expect(nop == "nop")
+        XCTAssertTrue(nop == "nop")
         let invokeVirtual = String(cString: dx_opcode_name(0x6E))
-        #expect(invokeVirtual == "invoke-virtual")
+        XCTAssertTrue(invokeVirtual == "invoke-virtual")
     }
-
-    @Test("UI node tree operations")
     func testUINodeTree() {
         let root = dx_ui_node_create(DX_VIEW_LINEAR_LAYOUT, 1)!
         let child1 = dx_ui_node_create(DX_VIEW_TEXT_VIEW, 2)!
@@ -90,57 +75,49 @@ struct DexLoomCoreTests {
 
         dx_ui_node_add_child(root, child1)
         dx_ui_node_add_child(root, child2)
-        #expect(root.pointee.child_count == 2)
+        XCTAssertTrue(root.pointee.child_count == 2)
 
         dx_ui_node_set_text(child1, "Hello")
-        #expect(String(cString: child1.pointee.text) == "Hello")
+        XCTAssertTrue(String(cString: child1.pointee.text) == "Hello")
 
         let found = dx_ui_node_find_by_id(root, 3)
-        #expect(found == child2)
-        #expect(dx_ui_node_find_by_id(root, 99) == nil)
+        XCTAssertTrue(found == child2)
+        XCTAssertTrue(dx_ui_node_find_by_id(root, 99) == nil)
 
         dx_ui_node_destroy(root)
     }
-
-    @Test("VM framework class registration")
     func testVMFrameworkRegistration() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
-        #expect(dx_vm_find_class(vm, "Ljava/lang/Object;") != nil)
-        #expect(dx_vm_find_class(vm, "Landroid/app/Activity;") != nil)
-        #expect(dx_vm_find_class(vm, "Landroid/widget/TextView;") != nil)
-        #expect(dx_vm_find_class(vm, "Landroid/widget/Button;") != nil)
+        XCTAssertTrue(dx_vm_find_class(vm, "Ljava/lang/Object;") != nil)
+        XCTAssertTrue(dx_vm_find_class(vm, "Landroid/app/Activity;") != nil)
+        XCTAssertTrue(dx_vm_find_class(vm, "Landroid/widget/TextView;") != nil)
+        XCTAssertTrue(dx_vm_find_class(vm, "Landroid/widget/Button;") != nil)
     }
-
-    @Test("VM string creation and retrieval")
     func testVMStrings() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let strObj = dx_vm_create_string(vm, "Hello DexLoom")
-        #expect(strObj != nil)
+        XCTAssertTrue(strObj != nil)
         if let strObj = strObj {
             let value = dx_vm_get_string_value(strObj)
-            #expect(value != nil)
+            XCTAssertTrue(value != nil)
             if let value = value {
-                #expect(String(cString: value) == "Hello DexLoom")
+                XCTAssertTrue(String(cString: value) == "Hello DexLoom")
             }
         }
     }
-
-    @Test("VM object allocation")
     func testVMObjectAlloc() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let cls = dx_vm_find_class(vm, "Ljava/lang/Object;")!
         let obj = dx_vm_alloc_object(vm, cls)
-        #expect(obj != nil)
-        #expect(obj?.pointee.klass == cls)
+        XCTAssertTrue(obj != nil)
+        XCTAssertTrue(obj?.pointee.klass == cls)
     }
-
-    @Test("Field set/get on multi-level hierarchy does not crash")
     func testFieldHierarchySafety() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -152,33 +129,27 @@ struct DexLoomCoreTests {
         // set_field on a field that doesn't exist should not crash
         var val = DxValue(tag: DX_VAL_INT, DxValue.__Unnamed_union___Anonymous_field1(i: 42))
         let setResult = dx_vm_set_field(obj, "mExtraDataMap", val)
-        #expect(setResult == DX_OK) // silently absorbed
+        XCTAssertTrue(setResult == DX_OK) // silently absorbed
 
         // get_field on a missing field should return null, not crash
         var out = DxValue(tag: DX_VAL_OBJ, DxValue.__Unnamed_union___Anonymous_field1(obj: nil))
         let getResult = dx_vm_get_field(obj, "mExtraDataMap", &out)
-        #expect(getResult == DX_OK) // returns null
+        XCTAssertTrue(getResult == DX_OK) // returns null
     }
-
-    @Test("AppCompatActivity is registered")
     func testAppCompatRegistered() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
-        #expect(dx_vm_find_class(vm, "Landroidx/appcompat/app/AppCompatActivity;") != nil)
-        #expect(dx_vm_find_class(vm, "Landroidx/constraintlayout/widget/ConstraintLayout;") != nil)
+        XCTAssertTrue(dx_vm_find_class(vm, "Landroidx/appcompat/app/AppCompatActivity;") != nil)
+        XCTAssertTrue(dx_vm_find_class(vm, "Landroidx/constraintlayout/widget/ConstraintLayout;") != nil)
     }
-
-    @Test("Opcode width lookup")
     func testOpcodeWidths() {
-        #expect(dx_opcode_width(0x00) == 1) // nop
-        #expect(dx_opcode_width(0x28) == 1) // goto (was broken: 2)
-        #expect(dx_opcode_width(0x6E) == 3) // invoke-virtual
-        #expect(dx_opcode_width(0x14) == 3) // const (31i)
-        #expect(dx_opcode_width(0x18) == 5) // const-wide (51l)
+        XCTAssertTrue(dx_opcode_width(0x00) == 1) // nop
+        XCTAssertTrue(dx_opcode_width(0x28) == 1) // goto (was broken: 2)
+        XCTAssertTrue(dx_opcode_width(0x6E) == 3) // invoke-virtual
+        XCTAssertTrue(dx_opcode_width(0x14) == 3) // const (31i)
+        XCTAssertTrue(dx_opcode_width(0x18) == 5) // const-wide (51l)
     }
-
-    @Test("Render model creation from UI tree")
     func testRenderModel() {
         let root = dx_ui_node_create(DX_VIEW_LINEAR_LAYOUT, 1)!
         root.pointee.orientation = DX_ORIENTATION_VERTICAL
@@ -188,10 +159,10 @@ struct DexLoomCoreTests {
         dx_ui_node_add_child(root, tv)
 
         let model = dx_render_model_create(root)
-        #expect(model != nil)
-        #expect(model!.pointee.root != nil)
-        #expect(model!.pointee.root.pointee.type == DX_VIEW_LINEAR_LAYOUT)
-        #expect(model!.pointee.root.pointee.child_count == 1)
+        XCTAssertTrue(model != nil)
+        XCTAssertTrue(model!.pointee.root != nil)
+        XCTAssertTrue(model!.pointee.root.pointee.type == DX_VIEW_LINEAR_LAYOUT)
+        XCTAssertTrue(model!.pointee.root.pointee.child_count == 1)
 
         dx_render_model_destroy(model)
         dx_ui_node_destroy(root)
@@ -202,33 +173,26 @@ struct DexLoomCoreTests {
 // MARK: - VM Lifecycle Tests
 // ============================================================
 
-@Suite("VM Lifecycle Tests")
-struct VMLifecycleTests {
-
-    @Test("Create and destroy VM without crash")
+final class VMLifecycleTests: XCTestCase {
     func testCreateDestroy() {
         let ctx = dx_context_create()!
         let vm = dx_vm_create(ctx)
-        #expect(vm != nil)
+        XCTAssertTrue(vm != nil)
         if let vm = vm {
             dx_vm_destroy(vm)
         }
         ctx.pointee.vm = nil
         dx_context_destroy(ctx)
     }
-
-    @Test("Register framework classes returns OK")
     func testRegisterFramework() {
         let ctx = dx_context_create()!
         let vm = dx_vm_create(ctx)!
         let result = dx_vm_register_framework_classes(vm)
-        #expect(result == DX_OK)
+        XCTAssertTrue(result == DX_OK)
         // Should have registered many classes
-        #expect(vm.pointee.class_count > 100)
+        XCTAssertTrue(vm.pointee.class_count > 100)
         teardownVM(ctx, vm)
     }
-
-    @Test("Class hash table lookup works for all well-known classes")
     func testClassHashTable() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -256,44 +220,38 @@ struct VMLifecycleTests {
         ]
         for name in classNames {
             let cls = dx_vm_find_class(vm, name)
-            #expect(cls != nil, "Expected to find class \(name)")
+            XCTAssertTrue(cls != nil, "Expected to find class \(name)")
         }
     }
-
-    @Test("find_class returns nil for unknown class")
     func testFindClassUnknown() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let cls = dx_vm_find_class(vm, "Lcom/nonexistent/FakeClass;")
-        #expect(cls == nil)
+        XCTAssertTrue(cls == nil)
     }
-
-    @Test("VM cached class pointers are set after registration")
     func testVMCachedPointers() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
-        #expect(vm.pointee.class_object != nil)
-        #expect(vm.pointee.class_string != nil)
-        #expect(vm.pointee.class_activity != nil)
-        #expect(vm.pointee.class_view != nil)
-        #expect(vm.pointee.class_textview != nil)
-        #expect(vm.pointee.class_button != nil)
-        #expect(vm.pointee.class_viewgroup != nil)
-        #expect(vm.pointee.class_linearlayout != nil)
-        #expect(vm.pointee.class_context != nil)
-        #expect(vm.pointee.class_bundle != nil)
-        #expect(vm.pointee.class_arraylist != nil)
-        #expect(vm.pointee.class_hashmap != nil)
-        #expect(vm.pointee.class_intent != nil)
-        #expect(vm.pointee.class_edittext != nil)
-        #expect(vm.pointee.class_imageview != nil)
-        #expect(vm.pointee.class_toast != nil)
-        #expect(vm.pointee.class_appcompat != nil)
+        XCTAssertTrue(vm.pointee.class_object != nil)
+        XCTAssertTrue(vm.pointee.class_string != nil)
+        XCTAssertTrue(vm.pointee.class_activity != nil)
+        XCTAssertTrue(vm.pointee.class_view != nil)
+        XCTAssertTrue(vm.pointee.class_textview != nil)
+        XCTAssertTrue(vm.pointee.class_button != nil)
+        XCTAssertTrue(vm.pointee.class_viewgroup != nil)
+        XCTAssertTrue(vm.pointee.class_linearlayout != nil)
+        XCTAssertTrue(vm.pointee.class_context != nil)
+        XCTAssertTrue(vm.pointee.class_bundle != nil)
+        XCTAssertTrue(vm.pointee.class_arraylist != nil)
+        XCTAssertTrue(vm.pointee.class_hashmap != nil)
+        XCTAssertTrue(vm.pointee.class_intent != nil)
+        XCTAssertTrue(vm.pointee.class_edittext != nil)
+        XCTAssertTrue(vm.pointee.class_imageview != nil)
+        XCTAssertTrue(vm.pointee.class_toast != nil)
+        XCTAssertTrue(vm.pointee.class_appcompat != nil)
     }
-
-    @Test("Multiple VM instances can coexist")
     func testMultipleVMs() {
         let ctx1 = dx_context_create()!
         let vm1 = dx_vm_create(ctx1)!
@@ -304,14 +262,14 @@ struct VMLifecycleTests {
         dx_vm_register_framework_classes(vm2)
 
         // Both should work independently
-        #expect(dx_vm_find_class(vm1, "Ljava/lang/String;") != nil)
-        #expect(dx_vm_find_class(vm2, "Ljava/lang/String;") != nil)
+        XCTAssertTrue(dx_vm_find_class(vm1, "Ljava/lang/String;") != nil)
+        XCTAssertTrue(dx_vm_find_class(vm2, "Ljava/lang/String;") != nil)
 
         // Objects from vm1 and vm2 are separate
         let s1 = dx_vm_create_string(vm1, "hello")
         let s2 = dx_vm_create_string(vm2, "world")
-        #expect(s1 != nil)
-        #expect(s2 != nil)
+        XCTAssertTrue(s1 != nil)
+        XCTAssertTrue(s2 != nil)
 
         dx_vm_destroy(vm1)
         ctx1.pointee.vm = nil
@@ -319,7 +277,7 @@ struct VMLifecycleTests {
 
         // vm2 should still work after vm1 is destroyed
         let s3 = dx_vm_create_string(vm2, "still alive")
-        #expect(s3 != nil)
+        XCTAssertTrue(s3 != nil)
 
         dx_vm_destroy(vm2)
         ctx2.pointee.vm = nil
@@ -331,72 +289,61 @@ struct VMLifecycleTests {
 // MARK: - Framework Class Tests
 // ============================================================
 
-@Suite("Framework Class Tests")
-struct FrameworkClassTests {
-
-    @Test("String creation with various content")
+final class FrameworkClassTests: XCTestCase {
     func testStringCreation() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         // Empty string
         let empty = dx_vm_create_string(vm, "")
-        #expect(empty != nil)
-        #expect(String(cString: dx_vm_get_string_value(empty)!) == "")
+        XCTAssertTrue(empty != nil)
+        XCTAssertTrue(String(cString: dx_vm_get_string_value(empty)!) == "")
 
         // ASCII content
         let ascii = dx_vm_create_string(vm, "Hello World 123")
-        #expect(ascii != nil)
-        #expect(String(cString: dx_vm_get_string_value(ascii)!) == "Hello World 123")
+        XCTAssertTrue(ascii != nil)
+        XCTAssertTrue(String(cString: dx_vm_get_string_value(ascii)!) == "Hello World 123")
 
         // Long string
         let longStr = String(repeating: "abcd", count: 250)
         let longObj = dx_vm_create_string(vm, longStr)
-        #expect(longObj != nil)
-        #expect(String(cString: dx_vm_get_string_value(longObj)!) == longStr)
+        XCTAssertTrue(longObj != nil)
+        XCTAssertTrue(String(cString: dx_vm_get_string_value(longObj)!) == longStr)
     }
-
-    @Test("String interning returns same object for same value")
     func testStringInterning() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let s1 = dx_vm_intern_string(vm, "interned_test")
         let s2 = dx_vm_intern_string(vm, "interned_test")
-        #expect(s1 != nil)
-        #expect(s2 != nil)
+        XCTAssertTrue(s1 != nil)
+        XCTAssertTrue(s2 != nil)
         // Interned strings with same value should be the same object
-        #expect(s1 == s2)
+        XCTAssertTrue(s1 == s2)
 
         // Different value should be a different object
         let s3 = dx_vm_intern_string(vm, "different_value")
-        #expect(s3 != nil)
-        #expect(s3 != s1)
+        XCTAssertTrue(s3 != nil)
+        XCTAssertTrue(s3 != s1)
     }
-
-    @Test("String object has correct class")
     func testStringClass() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let strObj = dx_vm_create_string(vm, "test")!
-        #expect(strObj.pointee.klass == vm.pointee.class_string)
+        XCTAssertTrue(strObj.pointee.klass == vm.pointee.class_string)
         let desc = String(cString: strObj.pointee.klass.pointee.descriptor)
-        #expect(desc == "Ljava/lang/String;")
+        XCTAssertTrue(desc == "Ljava/lang/String;")
     }
-
-    @Test("ArrayList: find class and create instance")
     func testArrayListCreation() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let alCls = dx_vm_find_class(vm, "Ljava/util/ArrayList;")!
         let list = dx_vm_alloc_object(vm, alCls)
-        #expect(list != nil)
-        #expect(list?.pointee.klass == alCls)
+        XCTAssertTrue(list != nil)
+        XCTAssertTrue(list?.pointee.klass == alCls)
     }
-
-    @Test("ArrayList: native add and size methods exist")
     func testArrayListMethods() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -405,53 +352,47 @@ struct FrameworkClassTests {
 
         // Check that key methods are registered
         let addMethod = dx_vm_find_method(alCls, "add", "ZL")
-        #expect(addMethod != nil, "ArrayList.add should be registered")
+        XCTAssertTrue(addMethod != nil, "ArrayList.add should be registered")
 
         let sizeMethod = dx_vm_find_method(alCls, "size", "I")
-        #expect(sizeMethod != nil, "ArrayList.size should be registered")
+        XCTAssertTrue(sizeMethod != nil, "ArrayList.size should be registered")
 
         let getMethod = dx_vm_find_method(alCls, "get", "LI")
-        #expect(getMethod != nil, "ArrayList.get should be registered")
+        XCTAssertTrue(getMethod != nil, "ArrayList.get should be registered")
     }
-
-    @Test("HashMap: find class and verify methods")
     func testHashMapMethods() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let hmCls = dx_vm_find_class(vm, "Ljava/util/HashMap;")!
         let obj = dx_vm_alloc_object(vm, hmCls)
-        #expect(obj != nil)
+        XCTAssertTrue(obj != nil)
 
         // Check key methods
         let putMethod = dx_vm_find_method(hmCls, "put", "LLL")
-        #expect(putMethod != nil, "HashMap.put should be registered")
+        XCTAssertTrue(putMethod != nil, "HashMap.put should be registered")
 
         let getMethod = dx_vm_find_method(hmCls, "get", "LL")
-        #expect(getMethod != nil, "HashMap.get should be registered")
+        XCTAssertTrue(getMethod != nil, "HashMap.get should be registered")
 
         let sizeMethod = dx_vm_find_method(hmCls, "size", "I")
-        #expect(sizeMethod != nil, "HashMap.size should be registered")
+        XCTAssertTrue(sizeMethod != nil, "HashMap.size should be registered")
 
         let containsKeyMethod = dx_vm_find_method(hmCls, "containsKey", "ZL")
-        #expect(containsKeyMethod != nil, "HashMap.containsKey should be registered")
+        XCTAssertTrue(containsKeyMethod != nil, "HashMap.containsKey should be registered")
     }
-
-    @Test("Integer valueOf autoboxing class exists")
     func testIntegerAutoboxing() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let intCls = dx_vm_find_class(vm, "Ljava/lang/Integer;")
-        #expect(intCls != nil, "java.lang.Integer should be registered")
+        XCTAssertTrue(intCls != nil, "java.lang.Integer should be registered")
 
         if let intCls = intCls {
             let valueOf = dx_vm_find_method(intCls, "valueOf", "LI")
-            #expect(valueOf != nil, "Integer.valueOf should be registered for autoboxing")
+            XCTAssertTrue(valueOf != nil, "Integer.valueOf should be registered for autoboxing")
         }
     }
-
-    @Test("Long/Float/Double/Boolean autoboxing classes exist")
     func testAutoboxingClasses() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -467,15 +408,13 @@ struct FrameworkClassTests {
         ]
         for (desc, shorty) in types {
             let cls = dx_vm_find_class(vm, desc)
-            #expect(cls != nil, "Expected \(desc) to be registered")
+            XCTAssertTrue(cls != nil, "Expected \(desc) to be registered")
             if let cls = cls {
                 let valueOf = dx_vm_find_method(cls, "valueOf", shorty)
-                #expect(valueOf != nil, "Expected valueOf on \(desc)")
+                XCTAssertTrue(valueOf != nil, "Expected valueOf on \(desc)")
             }
         }
     }
-
-    @Test("Activity class has lifecycle methods")
     func testActivityLifecycleMethods() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -484,16 +423,14 @@ struct FrameworkClassTests {
 
         // Check lifecycle methods exist
         let onCreate = dx_vm_find_method(actCls, "onCreate", "VL")
-        #expect(onCreate != nil, "Activity.onCreate should exist")
+        XCTAssertTrue(onCreate != nil, "Activity.onCreate should exist")
 
         let onStart = dx_vm_find_method(actCls, "onStart", "V")
-        #expect(onStart != nil, "Activity.onStart should exist")
+        XCTAssertTrue(onStart != nil, "Activity.onStart should exist")
 
         let onResume = dx_vm_find_method(actCls, "onResume", "V")
-        #expect(onResume != nil, "Activity.onResume should exist")
+        XCTAssertTrue(onResume != nil, "Activity.onResume should exist")
     }
-
-    @Test("View class has key methods")
     func testViewMethods() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -501,36 +438,30 @@ struct FrameworkClassTests {
         let viewCls = dx_vm_find_class(vm, "Landroid/view/View;")!
 
         let setOnClick = dx_vm_find_method(viewCls, "setOnClickListener", "VL")
-        #expect(setOnClick != nil, "View.setOnClickListener should exist")
+        XCTAssertTrue(setOnClick != nil, "View.setOnClickListener should exist")
 
         let findViewById = dx_vm_find_method(viewCls, "findViewById", "LI")
-        #expect(findViewById != nil, "View.findViewById should exist")
+        XCTAssertTrue(findViewById != nil, "View.findViewById should exist")
     }
-
-    @Test("Intent class exists with extras methods")
     func testIntentClass() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let intentCls = dx_vm_find_class(vm, "Landroid/content/Intent;")!
         let obj = dx_vm_alloc_object(vm, intentCls)
-        #expect(obj != nil)
+        XCTAssertTrue(obj != nil)
 
         let putExtra = dx_vm_find_method(intentCls, "putExtra", "LLL")
-        #expect(putExtra != nil, "Intent.putExtra should exist")
+        XCTAssertTrue(putExtra != nil, "Intent.putExtra should exist")
     }
-
-    @Test("Bundle class exists")
     func testBundleClass() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let bundleCls = dx_vm_find_class(vm, "Landroid/os/Bundle;")!
         let obj = dx_vm_alloc_object(vm, bundleCls)
-        #expect(obj != nil)
+        XCTAssertTrue(obj != nil)
     }
-
-    @Test("Exception class hierarchy")
     func testExceptionClasses() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -545,11 +476,9 @@ struct FrameworkClassTests {
         ]
         for desc in exceptions {
             let cls = dx_vm_find_class(vm, desc)
-            #expect(cls != nil, "Expected \(desc) to be registered")
+            XCTAssertTrue(cls != nil, "Expected \(desc) to be registered")
         }
     }
-
-    @Test("Collection interfaces registered")
     func testCollectionInterfaces() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -564,11 +493,9 @@ struct FrameworkClassTests {
         ]
         for desc in interfaces {
             let cls = dx_vm_find_class(vm, desc)
-            #expect(cls != nil, "Expected \(desc) to be registered")
+            XCTAssertTrue(cls != nil, "Expected \(desc) to be registered")
         }
     }
-
-    @Test("Android widget classes registered")
     func testWidgetClasses() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -584,18 +511,16 @@ struct FrameworkClassTests {
         ]
         for desc in widgets {
             let cls = dx_vm_find_class(vm, desc)
-            #expect(cls != nil, "Expected \(desc) to be registered")
+            XCTAssertTrue(cls != nil, "Expected \(desc) to be registered")
         }
     }
-
-    @Test("Kotlin standard library classes registered")
     func testKotlinClasses() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         // Kotlin stdlib should have some representation
         let kotlinUnit = dx_vm_find_class(vm, "Lkotlin/Unit;")
-        #expect(kotlinUnit != nil, "Kotlin Unit should be registered")
+        XCTAssertTrue(kotlinUnit != nil, "Kotlin Unit should be registered")
     }
 }
 
@@ -603,10 +528,7 @@ struct FrameworkClassTests {
 // MARK: - Object System Tests
 // ============================================================
 
-@Suite("Object System Tests")
-struct ObjectSystemTests {
-
-    @Test("Allocate object and verify class pointer")
+final class ObjectSystemTests: XCTestCase {
     func testAllocObjectClass() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -614,39 +536,33 @@ struct ObjectSystemTests {
         let objCls = dx_vm_find_class(vm, "Ljava/lang/Object;")!
         let obj = dx_vm_alloc_object(vm, objCls)!
 
-        #expect(obj.pointee.klass == objCls)
-        #expect(obj.pointee.is_array == false)
-        #expect(obj.pointee.gc_mark == false)
+        XCTAssertTrue(obj.pointee.klass == objCls)
+        XCTAssertTrue(obj.pointee.is_array == false)
+        XCTAssertTrue(obj.pointee.gc_mark == false)
     }
-
-    @Test("Allocate array and verify length")
     func testAllocArray() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let arr = dx_vm_alloc_array(vm, 10)
-        #expect(arr != nil)
+        XCTAssertTrue(arr != nil)
         if let arr = arr {
-            #expect(arr.pointee.is_array == true)
-            #expect(arr.pointee.array_length == 10)
-            #expect(arr.pointee.array_elements != nil)
+            XCTAssertTrue(arr.pointee.is_array == true)
+            XCTAssertTrue(arr.pointee.array_length == 10)
+            XCTAssertTrue(arr.pointee.array_elements != nil)
         }
     }
-
-    @Test("Allocate zero-length array")
     func testAllocZeroArray() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let arr = dx_vm_alloc_array(vm, 0)
-        #expect(arr != nil)
+        XCTAssertTrue(arr != nil)
         if let arr = arr {
-            #expect(arr.pointee.is_array == true)
-            #expect(arr.pointee.array_length == 0)
+            XCTAssertTrue(arr.pointee.is_array == true)
+            XCTAssertTrue(arr.pointee.array_length == 0)
         }
     }
-
-    @Test("Array element access")
     func testArrayElementAccess() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -657,12 +573,10 @@ struct ObjectSystemTests {
         arr.pointee.array_elements[0] = DxValue(tag: DX_VAL_INT, DxValue.__Unnamed_union___Anonymous_field1(i: 42))
         arr.pointee.array_elements[1] = DxValue(tag: DX_VAL_INT, DxValue.__Unnamed_union___Anonymous_field1(i: 99))
 
-        #expect(arr.pointee.array_elements[0].tag == DX_VAL_INT)
-        #expect(arr.pointee.array_elements[0].i == 42)
-        #expect(arr.pointee.array_elements[1].i == 99)
+        XCTAssertTrue(arr.pointee.array_elements[0].tag == DX_VAL_INT)
+        XCTAssertTrue(arr.pointee.array_elements[0].i == 42)
+        XCTAssertTrue(arr.pointee.array_elements[1].i == 99)
     }
-
-    @Test("Heap tracks allocated objects")
     func testHeapTracking() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -671,13 +585,11 @@ struct ObjectSystemTests {
         let objCls = dx_vm_find_class(vm, "Ljava/lang/Object;")!
 
         let _ = dx_vm_alloc_object(vm, objCls)
-        #expect(vm.pointee.heap_count == initialCount + 1)
+        XCTAssertTrue(vm.pointee.heap_count == initialCount + 1)
 
         let _ = dx_vm_alloc_object(vm, objCls)
-        #expect(vm.pointee.heap_count == initialCount + 2)
+        XCTAssertTrue(vm.pointee.heap_count == initialCount + 2)
     }
-
-    @Test("GC function exists and heap tracks objects")
     func testGCRelated() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -688,12 +600,10 @@ struct ObjectSystemTests {
         for _ in 0..<20 {
             let _ = dx_vm_alloc_object(vm, objCls)
         }
-        #expect(vm.pointee.heap_count == initialCount + 20)
+        XCTAssertTrue(vm.pointee.heap_count == initialCount + 20)
         // Note: dx_vm_gc requires a running execution context with proper
         // root set; calling it outside of execution can crash.
     }
-
-    @Test("Object fields for classes with field_defs")
     func testObjectFieldsWithDefs() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -701,45 +611,39 @@ struct ObjectSystemTests {
         // TextView should have field_defs (e.g., mText)
         let tvCls = dx_vm_find_class(vm, "Landroid/widget/TextView;")!
         let tv = dx_vm_alloc_object(vm, tvCls)!
-        #expect(tv.pointee.klass == tvCls)
+        XCTAssertTrue(tv.pointee.klass == tvCls)
     }
-
-    @Test("VM heap stats returns valid string")
     func testHeapStats() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let _ = dx_vm_alloc_object(vm, dx_vm_find_class(vm, "Ljava/lang/Object;")!)
         let stats = dx_vm_heap_stats(vm)
-        #expect(stats != nil)
+        XCTAssertTrue(stats != nil)
         if let stats = stats {
             let str = String(cString: stats)
-            #expect(str.count > 0)
+            XCTAssertTrue(str.count > 0)
             free(stats)
         }
     }
-
-    @Test("Create exception object with message")
     func testCreateException() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let exc = dx_vm_create_exception(vm, "Ljava/lang/NullPointerException;", "test null pointer")
-        #expect(exc != nil)
+        XCTAssertTrue(exc != nil)
         if let exc = exc {
             let desc = String(cString: exc.pointee.klass.pointee.descriptor)
-            #expect(desc == "Ljava/lang/NullPointerException;")
+            XCTAssertTrue(desc == "Ljava/lang/NullPointerException;")
         }
     }
-
-    @Test("Frame pool allocation and release")
     func testFramePool() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         // Allocate a frame
         let frame = dx_vm_alloc_frame(vm)
-        #expect(frame != nil)
+        XCTAssertTrue(frame != nil)
 
         // Free it back to pool
         if let frame = frame {
@@ -748,13 +652,11 @@ struct ObjectSystemTests {
 
         // Allocate again - should reuse from pool
         let frame2 = dx_vm_alloc_frame(vm)
-        #expect(frame2 != nil)
+        XCTAssertTrue(frame2 != nil)
         if let frame2 = frame2 {
             dx_vm_free_frame(vm, frame2)
         }
     }
-
-    @Test("Frame pool handles many allocations")
     func testFramePoolStress() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -766,7 +668,7 @@ struct ObjectSystemTests {
                 frames.append(f)
             }
         }
-        #expect(frames.count == 80)
+        XCTAssertTrue(frames.count == 80)
 
         // Free them all
         for f in frames {
@@ -779,17 +681,14 @@ struct ObjectSystemTests {
 // MARK: - Bytecode Execution Tests
 // ============================================================
 
-@Suite("Bytecode Execution Tests")
-struct BytecodeExecutionTests {
-
-    @Test("Execute native method on String class")
+final class BytecodeExecutionTests: XCTestCase {
     func testExecuteNativeMethod() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let strCls = dx_vm_find_class(vm, "Ljava/lang/String;")!
         let lengthMethod = dx_vm_find_method(strCls, "length", "I")
-        #expect(lengthMethod != nil, "String.length should exist")
+        XCTAssertTrue(lengthMethod != nil, "String.length should exist")
 
         if let lengthMethod = lengthMethod {
             // Create a string object to call length on
@@ -798,13 +697,11 @@ struct BytecodeExecutionTests {
             var result = DxValue(tag: DX_VAL_VOID, DxValue.__Unnamed_union___Anonymous_field1(i: 0))
 
             let status = dx_vm_execute_method(vm, lengthMethod, &args, 1, &result)
-            #expect(status == DX_OK)
-            #expect(result.tag == DX_VAL_INT)
-            #expect(result.i == 5)
+            XCTAssertTrue(status == DX_OK)
+            XCTAssertTrue(result.tag == DX_VAL_INT)
+            XCTAssertTrue(result.i == 5)
         }
     }
-
-    @Test("Execute ArrayList.size on empty list")
     func testArrayListSize() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -825,12 +722,10 @@ struct BytecodeExecutionTests {
         var sizeArgs = [DxValue(tag: DX_VAL_OBJ, DxValue.__Unnamed_union___Anonymous_field1(obj: list))]
         var sizeResult = DxValue(tag: DX_VAL_VOID, DxValue.__Unnamed_union___Anonymous_field1(i: 0))
         let status = dx_vm_execute_method(vm, sizeMethod, &sizeArgs, 1, &sizeResult)
-        #expect(status == DX_OK)
-        #expect(sizeResult.tag == DX_VAL_INT)
-        #expect(sizeResult.i == 0)
+        XCTAssertTrue(status == DX_OK)
+        XCTAssertTrue(sizeResult.tag == DX_VAL_INT)
+        XCTAssertTrue(sizeResult.i == 0)
     }
-
-    @Test("Execute ArrayList add then size")
     func testArrayListAddAndSize() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -856,7 +751,7 @@ struct BytecodeExecutionTests {
             ]
             var addResult = DxValue(tag: DX_VAL_VOID, DxValue.__Unnamed_union___Anonymous_field1(i: 0))
             let s = dx_vm_execute_method(vm, addMethod, &addArgs, 2, &addResult)
-            #expect(s == DX_OK)
+            XCTAssertTrue(s == DX_OK)
         }
 
         // Size should be 3
@@ -864,11 +759,9 @@ struct BytecodeExecutionTests {
         var sizeArgs = [DxValue(tag: DX_VAL_OBJ, DxValue.__Unnamed_union___Anonymous_field1(obj: list))]
         var sizeResult = DxValue(tag: DX_VAL_VOID, DxValue.__Unnamed_union___Anonymous_field1(i: 0))
         let status = dx_vm_execute_method(vm, sizeMethod, &sizeArgs, 1, &sizeResult)
-        #expect(status == DX_OK)
-        #expect(sizeResult.i == 3)
+        XCTAssertTrue(status == DX_OK)
+        XCTAssertTrue(sizeResult.i == 3)
     }
-
-    @Test("Execute HashMap put and get")
     func testHashMapPutGet() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -895,7 +788,7 @@ struct BytecodeExecutionTests {
         ]
         var putResult = DxValue(tag: DX_VAL_VOID, DxValue.__Unnamed_union___Anonymous_field1(i: 0))
         let putStatus = dx_vm_execute_method(vm, putMethod, &putArgs, 3, &putResult)
-        #expect(putStatus == DX_OK)
+        XCTAssertTrue(putStatus == DX_OK)
 
         // Get by key
         let getMethod = dx_vm_find_method(hmCls, "get", "LL")!
@@ -905,15 +798,13 @@ struct BytecodeExecutionTests {
         ]
         var getResult = DxValue(tag: DX_VAL_VOID, DxValue.__Unnamed_union___Anonymous_field1(i: 0))
         let getStatus = dx_vm_execute_method(vm, getMethod, &getArgs, 2, &getResult)
-        #expect(getStatus == DX_OK)
-        #expect(getResult.tag == DX_VAL_OBJ)
+        XCTAssertTrue(getStatus == DX_OK)
+        XCTAssertTrue(getResult.tag == DX_VAL_OBJ)
         if let resultObj = getResult.obj {
             let resultStr = String(cString: dx_vm_get_string_value(resultObj)!)
-            #expect(resultStr == "myValue")
+            XCTAssertTrue(resultStr == "myValue")
         }
     }
-
-    @Test("Execute Integer.valueOf autoboxing")
     func testIntegerValueOf() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -925,20 +816,16 @@ struct BytecodeExecutionTests {
         var args = [DxValue(tag: DX_VAL_INT, DxValue.__Unnamed_union___Anonymous_field1(i: 42))]
         var result = DxValue(tag: DX_VAL_VOID, DxValue.__Unnamed_union___Anonymous_field1(i: 0))
         let status = dx_vm_execute_method(vm, valueOf, &args, 1, &result)
-        #expect(status == DX_OK)
-        #expect(result.tag == DX_VAL_OBJ)
-        #expect(result.obj != nil)
+        XCTAssertTrue(status == DX_OK)
+        XCTAssertTrue(result.tag == DX_VAL_OBJ)
+        XCTAssertTrue(result.obj != nil)
     }
-
-    @Test("Opcode coverage: all 256 opcodes have names")
     func testAllOpcodesHaveNames() {
         for i: UInt8 in 0...255 {
             let name = dx_opcode_name(i)
-            #expect(name != nil, "Opcode 0x\(String(i, radix: 16)) should have a name")
+            XCTAssertTrue(name != nil, "Opcode 0x\(String(i, radix: 16)) should have a name")
         }
     }
-
-    @Test("Opcode widths are all > 0 for valid opcodes")
     func testOpcodeWidthsPositive() {
         // Key opcodes that must have positive widths
         let opcodes: [UInt8] = [
@@ -954,7 +841,7 @@ struct BytecodeExecutionTests {
             0x90, // add-int
         ]
         for op in opcodes {
-            #expect(dx_opcode_width(op) > 0, "Opcode 0x\(String(op, radix: 16)) width should be > 0")
+            XCTAssertTrue(dx_opcode_width(op) > 0, "Opcode 0x\(String(op, radix: 16)) width should be > 0")
         }
     }
 }
@@ -963,19 +850,14 @@ struct BytecodeExecutionTests {
 // MARK: - Error Handling Tests
 // ============================================================
 
-@Suite("Error Handling Tests")
-struct ErrorHandlingTests {
-
-    @Test("DEX parse rejects nil/empty data")
+final class ErrorHandlingTests: XCTestCase {
     func testDexParseEmpty() {
         var dex: UnsafeMutablePointer<DxDexFile>?
         // Empty buffer (too small for header)
         var data = [UInt8](repeating: 0, count: 4)
         let result = dx_dex_parse(&data, UInt32(data.count), &dex)
-        #expect(result != DX_OK)
+        XCTAssertTrue(result != DX_OK)
     }
-
-    @Test("DEX parse rejects truncated header")
     func testDexParseTruncated() {
         var dex: UnsafeMutablePointer<DxDexFile>?
         // 50 bytes is less than the 112-byte header
@@ -983,10 +865,8 @@ struct ErrorHandlingTests {
         let magic: [UInt8] = [0x64, 0x65, 0x78, 0x0A, 0x30, 0x33, 0x35, 0x00]
         for i in 0..<8 { data[i] = magic[i] }
         let result = dx_dex_parse(&data, UInt32(data.count), &dex)
-        #expect(result != DX_OK)
+        XCTAssertTrue(result != DX_OK)
     }
-
-    @Test("DEX parse rejects wrong version magic")
     func testDexWrongVersion() {
         var data = [UInt8](repeating: 0, count: 112)
         // Valid prefix but invalid version "099"
@@ -1004,19 +884,15 @@ struct ErrorHandlingTests {
             dx_dex_free(dex)
         }
     }
-
-    @Test("Instruction budget limit prevents infinite loops")
     func testInstructionBudget() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         // The VM has insn_limit field - verify it's set to a reasonable value
         // or can be set
-        #expect(vm.pointee.insn_limit == 0 || vm.pointee.insn_limit > 0)
+        XCTAssertTrue(vm.pointee.insn_limit == 0 || vm.pointee.insn_limit > 0)
         // DX_MAX_INSTRUCTIONS is 500000 per the types header
     }
-
-    @Test("Context double-destroy safety")
     func testContextDoubleCreate() {
         // Just verify multiple create/destroy cycles work
         for _ in 0..<5 {
@@ -1024,8 +900,6 @@ struct ErrorHandlingTests {
             dx_context_destroy(ctx)
         }
     }
-
-    @Test("Result string covers all error codes")
     func testAllResultStrings() {
         let codes: [DxResult] = [
             DX_OK,
@@ -1050,21 +924,17 @@ struct ErrorHandlingTests {
         ]
         for code in codes {
             let str = dx_result_string(code)
-            #expect(str != nil)
+            XCTAssertTrue(str != nil)
             let s = String(cString: str!)
-            #expect(s.count > 0, "Result string for code should not be empty")
+            XCTAssertTrue(s.count > 0, "Result string for code should not be empty")
         }
     }
-
-    @Test("VM diagnostic struct is clean on fresh VM")
     func testDiagnosticClean() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
-        #expect(vm.pointee.diag.has_error == false)
+        XCTAssertTrue(vm.pointee.diag.has_error == false)
     }
-
-    @Test("Create exception for unknown class returns nil or valid object")
     func testCreateExceptionUnknownClass() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -1074,11 +944,9 @@ struct ErrorHandlingTests {
         // Either nil or a fallback object is fine, just must not crash
         _ = exc
     }
-
-    @Test("String value of nil returns nil")
     func testGetStringValueNil() {
         let result = dx_vm_get_string_value(nil)
-        #expect(result == nil)
+        XCTAssertTrue(result == nil)
     }
 }
 
@@ -1086,18 +954,13 @@ struct ErrorHandlingTests {
 // MARK: - Parser Hardening Tests
 // ============================================================
 
-@Suite("Parser Hardening Tests")
-struct ParserHardeningTests {
-
-    @Test("DEX parse rejects completely garbage data")
+final class ParserHardeningTests: XCTestCase {
     func testGarbageData() {
         var data = [UInt8](repeating: 0xFF, count: 256)
         var dex: UnsafeMutablePointer<DxDexFile>?
         let result = dx_dex_parse(&data, UInt32(data.count), &dex)
-        #expect(result == DX_ERR_INVALID_MAGIC)
+        XCTAssertTrue(result == DX_ERR_INVALID_MAGIC)
     }
-
-    @Test("DEX parse with file_size mismatch")
     func testFileSizeMismatch() {
         var data = [UInt8](repeating: 0, count: 112)
         let magic: [UInt8] = [0x64, 0x65, 0x78, 0x0A, 0x30, 0x33, 0x35, 0x00]
@@ -1116,8 +979,6 @@ struct ParserHardeningTests {
             dx_dex_free(dex)
         }
     }
-
-    @Test("UI node create with all view types")
     func testAllViewTypes() {
         let types: [DxViewType] = [
             DX_VIEW_LINEAR_LAYOUT,
@@ -1154,16 +1015,14 @@ struct ParserHardeningTests {
         ]
         for (idx, viewType) in types.enumerated() {
             let node = dx_ui_node_create(viewType, UInt32(idx + 100))
-            #expect(node != nil, "Should create node for view type index \(idx)")
+            XCTAssertTrue(node != nil, "Should create node for view type index \(idx)")
             if let node = node {
-                #expect(node.pointee.type == viewType)
-                #expect(node.pointee.view_id == UInt32(idx + 100))
+                XCTAssertTrue(node.pointee.type == viewType)
+                XCTAssertTrue(node.pointee.view_id == UInt32(idx + 100))
                 dx_ui_node_destroy(node)
             }
         }
     }
-
-    @Test("UI node deep tree")
     func testDeepUITree() {
         // Build a 50-level deep tree
         let root = dx_ui_node_create(DX_VIEW_FRAME_LAYOUT, 0)!
@@ -1176,36 +1035,32 @@ struct ParserHardeningTests {
 
         // Set text on deepest node
         dx_ui_node_set_text(current, "deep leaf")
-        #expect(String(cString: current.pointee.text) == "deep leaf")
+        XCTAssertTrue(String(cString: current.pointee.text) == "deep leaf")
 
         // Find the deepest node by ID
         let found = dx_ui_node_find_by_id(root, 49)
-        #expect(found != nil)
-        #expect(found == current)
+        XCTAssertTrue(found != nil)
+        XCTAssertTrue(found == current)
 
         // Count total nodes
         let count = dx_ui_node_count(root)
-        #expect(count == 50)
+        XCTAssertTrue(count == 50)
 
         dx_ui_node_destroy(root)
     }
-
-    @Test("UI node text overwrite")
     func testUINodeTextOverwrite() {
         let node = dx_ui_node_create(DX_VIEW_TEXT_VIEW, 1)!
         dx_ui_node_set_text(node, "first")
-        #expect(String(cString: node.pointee.text) == "first")
+        XCTAssertTrue(String(cString: node.pointee.text) == "first")
 
         dx_ui_node_set_text(node, "second")
-        #expect(String(cString: node.pointee.text) == "second")
+        XCTAssertTrue(String(cString: node.pointee.text) == "second")
 
         dx_ui_node_set_text(node, "")
-        #expect(String(cString: node.pointee.text) == "")
+        XCTAssertTrue(String(cString: node.pointee.text) == "")
 
         dx_ui_node_destroy(node)
     }
-
-    @Test("UI node wide tree with many siblings")
     func testWideSiblingTree() {
         let root = dx_ui_node_create(DX_VIEW_LINEAR_LAYOUT, 0)!
         for i in 1...64 {
@@ -1213,17 +1068,15 @@ struct ParserHardeningTests {
             dx_ui_node_set_text(child, "item \(i)")
             dx_ui_node_add_child(root, child)
         }
-        #expect(root.pointee.child_count == 64)
-        #expect(dx_ui_node_count(root) == 65) // root + 64 children
+        XCTAssertTrue(root.pointee.child_count == 64)
+        XCTAssertTrue(dx_ui_node_count(root) == 65) // root + 64 children
 
         // Find last child
         let last = dx_ui_node_find_by_id(root, 64)
-        #expect(last != nil)
+        XCTAssertTrue(last != nil)
 
         dx_ui_node_destroy(root)
     }
-
-    @Test("Render model from complex tree")
     func testRenderModelComplex() {
         let root = dx_ui_node_create(DX_VIEW_LINEAR_LAYOUT, 1)!
         root.pointee.orientation = DX_ORIENTATION_VERTICAL
@@ -1240,14 +1093,12 @@ struct ParserHardeningTests {
         dx_ui_node_add_child(child2, nested)
 
         let model = dx_render_model_create(root)
-        #expect(model != nil)
-        #expect(model!.pointee.root.pointee.child_count == 2)
+        XCTAssertTrue(model != nil)
+        XCTAssertTrue(model!.pointee.root.pointee.child_count == 2)
 
         dx_render_model_destroy(model)
         dx_ui_node_destroy(root)
     }
-
-    @Test("UI tree dump returns non-empty string")
     func testUITreeDump() {
         let root = dx_ui_node_create(DX_VIEW_LINEAR_LAYOUT, 1)!
         let child = dx_ui_node_create(DX_VIEW_TEXT_VIEW, 2)!
@@ -1255,37 +1106,33 @@ struct ParserHardeningTests {
         dx_ui_node_add_child(root, child)
 
         let dump = dx_ui_tree_dump(root)
-        #expect(dump != nil)
+        XCTAssertTrue(dump != nil)
         if let dump = dump {
             let str = String(cString: dump)
-            #expect(str.count > 0)
+            XCTAssertTrue(str.count > 0)
             free(dump)
         }
 
         dx_ui_node_destroy(root)
     }
-
-    @Test("Dimension conversion produces positive values")
     func testDimensionConversion() {
         let dp16 = dx_ui_dp_to_points(16.0)
-        #expect(dp16 > 0)
+        XCTAssertTrue(dp16 > 0)
 
         let sp14 = dx_ui_sp_to_points(14.0)
-        #expect(sp14 > 0)
+        XCTAssertTrue(sp14 > 0)
 
         // Zero input gives zero output
         let dp0 = dx_ui_dp_to_points(0.0)
-        #expect(dp0 == 0.0)
+        XCTAssertTrue(dp0 == 0.0)
     }
-
-    @Test("Memory allocation functions work")
     func testMemoryFunctions() {
         var allocs: UInt64 = 0
         var frees: UInt64 = 0
         var bytes: UInt64 = 0
         dx_memory_stats(&allocs, &frees, &bytes)
         // Just verify it doesn't crash and returns something
-        #expect(allocs >= 0)
+        XCTAssertTrue(allocs >= 0)
     }
 }
 
@@ -1293,19 +1140,14 @@ struct ParserHardeningTests {
 // MARK: - Class Hierarchy Tests
 // ============================================================
 
-@Suite("Class Hierarchy Tests")
-struct ClassHierarchyTests {
-
-    @Test("Object is root of all classes")
+final class ClassHierarchyTests: XCTestCase {
     func testObjectRoot() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let objCls = dx_vm_find_class(vm, "Ljava/lang/Object;")!
-        #expect(objCls.pointee.super_class == nil)
+        XCTAssertTrue(objCls.pointee.super_class == nil)
     }
-
-    @Test("Activity extends Context chain")
     func testActivityHierarchy() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -1319,16 +1161,14 @@ struct ClassHierarchyTests {
             depth += 1
             if depth > 20 { break } // safety
         }
-        #expect(depth > 0, "Activity should have at least one superclass")
+        XCTAssertTrue(depth > 0, "Activity should have at least one superclass")
 
         // The root should be Object
         if let root = current {
             let desc = String(cString: root.pointee.descriptor)
-            #expect(desc == "Ljava/lang/Object;")
+            XCTAssertTrue(desc == "Ljava/lang/Object;")
         }
     }
-
-    @Test("AppCompatActivity extends Activity chain")
     func testAppCompatHierarchy() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -1348,35 +1188,29 @@ struct ClassHierarchyTests {
             depth += 1
             if depth > 20 { break }
         }
-        #expect(foundActivity, "AppCompatActivity should have Activity in its superclass chain")
+        XCTAssertTrue(foundActivity, "AppCompatActivity should have Activity in its superclass chain")
     }
-
-    @Test("Framework classes are marked as framework")
     func testFrameworkFlag() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let objCls = dx_vm_find_class(vm, "Ljava/lang/Object;")!
-        #expect(objCls.pointee.is_framework == true)
+        XCTAssertTrue(objCls.pointee.is_framework == true)
 
         let strCls = dx_vm_find_class(vm, "Ljava/lang/String;")!
-        #expect(strCls.pointee.is_framework == true)
+        XCTAssertTrue(strCls.pointee.is_framework == true)
 
         let actCls = dx_vm_find_class(vm, "Landroid/app/Activity;")!
-        #expect(actCls.pointee.is_framework == true)
+        XCTAssertTrue(actCls.pointee.is_framework == true)
     }
-
-    @Test("Button extends TextView")
     func testButtonExtendsTextView() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let btnCls = dx_vm_find_class(vm, "Landroid/widget/Button;")!
         let superDesc = String(cString: btnCls.pointee.super_class.pointee.descriptor)
-        #expect(superDesc == "Landroid/widget/TextView;")
+        XCTAssertTrue(superDesc == "Landroid/widget/TextView;")
     }
-
-    @Test("Class descriptors are valid format")
     func testClassDescriptorFormat() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -1391,12 +1225,12 @@ struct ClassHierarchyTests {
         ]
         for desc in sampleClasses {
             let cls = dx_vm_find_class(vm, desc)
-            #expect(cls != nil, "Should find class \(desc)")
+            XCTAssertTrue(cls != nil, "Should find class \(desc)")
             if let cls = cls {
                 let actualDesc = String(cString: cls.pointee.descriptor)
-                #expect(actualDesc.hasPrefix("L"), "Descriptor should start with L")
-                #expect(actualDesc.hasSuffix(";"), "Descriptor should end with ;")
-                #expect(actualDesc == desc)
+                XCTAssertTrue(actualDesc.hasPrefix("L"), "Descriptor should start with L")
+                XCTAssertTrue(actualDesc.hasSuffix(";"), "Descriptor should end with ;")
+                XCTAssertTrue(actualDesc == desc)
             }
         }
     }
@@ -1406,71 +1240,58 @@ struct ClassHierarchyTests {
 // MARK: - Method Resolution Tests
 // ============================================================
 
-@Suite("Method Resolution Tests")
-struct MethodResolutionTests {
-
-    @Test("find_method returns nil for nonexistent method")
+final class MethodResolutionTests: XCTestCase {
     func testFindMethodNotFound() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let objCls = dx_vm_find_class(vm, "Ljava/lang/Object;")!
         let m = dx_vm_find_method(objCls, "totallyFakeMethod", "V")
-        #expect(m == nil)
+        XCTAssertTrue(m == nil)
     }
-
-    @Test("Native methods have is_native flag set")
     func testNativeMethodFlag() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let strCls = dx_vm_find_class(vm, "Ljava/lang/String;")!
         let lengthMethod = dx_vm_find_method(strCls, "length", "I")
-        #expect(lengthMethod != nil)
+        XCTAssertTrue(lengthMethod != nil)
         if let m = lengthMethod {
-            #expect(m.pointee.is_native == true)
-            #expect(m.pointee.native_fn != nil)
+            XCTAssertTrue(m.pointee.is_native == true)
+            XCTAssertTrue(m.pointee.native_fn != nil)
         }
     }
-
-    @Test("Methods have valid declaring class")
     func testMethodDeclaringClass() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let alCls = dx_vm_find_class(vm, "Ljava/util/ArrayList;")!
         let addMethod = dx_vm_find_method(alCls, "add", "ZL")!
-        #expect(addMethod.pointee.declaring_class != nil)
+        XCTAssertTrue(addMethod.pointee.declaring_class != nil)
     }
-
-    @Test("Object.toString exists")
     func testObjectToString() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let objCls = dx_vm_find_class(vm, "Ljava/lang/Object;")!
         let toString = dx_vm_find_method(objCls, "toString", "L")
-        #expect(toString != nil, "Object.toString should be registered")
+        XCTAssertTrue(toString != nil, "Object.toString should be registered")
     }
-
-    @Test("Object.equals exists")
     func testObjectEquals() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let objCls = dx_vm_find_class(vm, "Ljava/lang/Object;")!
         let equals = dx_vm_find_method(objCls, "equals", "ZL")
-        #expect(equals != nil, "Object.equals should be registered")
+        XCTAssertTrue(equals != nil, "Object.equals should be registered")
     }
-
-    @Test("Object.hashCode exists")
     func testObjectHashCode() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let objCls = dx_vm_find_class(vm, "Ljava/lang/Object;")!
         let hashCode = dx_vm_find_method(objCls, "hashCode", "I")
-        #expect(hashCode != nil, "Object.hashCode should be registered")
+        XCTAssertTrue(hashCode != nil, "Object.hashCode should be registered")
     }
 }
 
@@ -1478,10 +1299,7 @@ struct MethodResolutionTests {
 // MARK: - Execution Edge Case Tests
 // ============================================================
 
-@Suite("Execution Edge Cases")
-struct ExecutionEdgeCaseTests {
-
-    @Test("String.length on empty string returns 0")
+final class ExecutionEdgeCaseTests: XCTestCase {
     func testStringLengthEmpty() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -1494,11 +1312,9 @@ struct ExecutionEdgeCaseTests {
         var result = DxValue(tag: DX_VAL_VOID, DxValue.__Unnamed_union___Anonymous_field1(i: 0))
 
         let status = dx_vm_execute_method(vm, lengthMethod, &args, 1, &result)
-        #expect(status == DX_OK)
-        #expect(result.i == 0)
+        XCTAssertTrue(status == DX_OK)
+        XCTAssertTrue(result.i == 0)
     }
-
-    @Test("HashMap.size on empty map returns 0")
     func testHashMapSizeEmpty() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -1517,11 +1333,9 @@ struct ExecutionEdgeCaseTests {
         var sizeArgs = [DxValue(tag: DX_VAL_OBJ, DxValue.__Unnamed_union___Anonymous_field1(obj: map))]
         var result = DxValue(tag: DX_VAL_VOID, DxValue.__Unnamed_union___Anonymous_field1(i: 0))
         let status = dx_vm_execute_method(vm, sizeMethod, &sizeArgs, 1, &result)
-        #expect(status == DX_OK)
-        #expect(result.i == 0)
+        XCTAssertTrue(status == DX_OK)
+        XCTAssertTrue(result.i == 0)
     }
-
-    @Test("Multiple strings don't interfere")
     func testMultipleStrings() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -1537,11 +1351,9 @@ struct ExecutionEdgeCaseTests {
         // Verify each still has its original value
         for (i, obj) in objects.enumerated() {
             let value = String(cString: dx_vm_get_string_value(obj)!)
-            #expect(value == strings[i], "String \(i) should be '\(strings[i])' but got '\(value)'")
+            XCTAssertTrue(value == strings[i], "String \(i) should be '\(strings[i])' but got '\(value)'")
         }
     }
-
-    @Test("Allocate many objects without crash")
     func testMassAllocation() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
@@ -1549,47 +1361,39 @@ struct ExecutionEdgeCaseTests {
         let objCls = dx_vm_find_class(vm, "Ljava/lang/Object;")!
         for _ in 0..<1000 {
             let obj = dx_vm_alloc_object(vm, objCls)
-            #expect(obj != nil)
+            XCTAssertTrue(obj != nil)
         }
     }
-
-    @Test("Allocate large array")
     func testLargeArray() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
         let arr = dx_vm_alloc_array(vm, 10000)
-        #expect(arr != nil)
+        XCTAssertTrue(arr != nil)
         if let arr = arr {
-            #expect(arr.pointee.array_length == 10000)
+            XCTAssertTrue(arr.pointee.array_length == 10000)
             // Write to last element
             arr.pointee.array_elements[9999] = DxValue(tag: DX_VAL_INT, DxValue.__Unnamed_union___Anonymous_field1(i: 777))
-            #expect(arr.pointee.array_elements[9999].i == 777)
+            XCTAssertTrue(arr.pointee.array_elements[9999].i == 777)
         }
     }
-
-    @Test("VM instruction counter starts at zero")
     func testInsnCounter() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
-        #expect(vm.pointee.insn_count == 0)
+        XCTAssertTrue(vm.pointee.insn_count == 0)
     }
-
-    @Test("VM pending exception is nil on fresh VM")
     func testPendingExceptionClean() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
-        #expect(vm.pointee.pending_exception == nil)
+        XCTAssertTrue(vm.pointee.pending_exception == nil)
     }
-
-    @Test("Activity stack depth is 0 on fresh VM")
     func testActivityStackClean() {
         let (ctx, vm) = makeVM()
         defer { teardownVM(ctx, vm) }
 
-        #expect(vm.pointee.activity_stack_depth == 0)
-        #expect(vm.pointee.activity_instance == nil)
+        XCTAssertTrue(vm.pointee.activity_stack_depth == 0)
+        XCTAssertTrue(vm.pointee.activity_instance == nil)
     }
 }

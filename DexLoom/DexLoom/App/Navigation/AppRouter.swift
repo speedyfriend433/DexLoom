@@ -1,21 +1,28 @@
 import SwiftUI
 
+@MainActor
 struct AppRouter: View {
-    @State private var appState = AppState()
+    @StateObject private var appState = AppState()
 
     var body: some View {
         TabView(selection: $appState.selectedTab) {
-            Tab(AppTab.home.rawValue, systemImage: AppTab.home.icon, value: .home) {
-                HomeView(bridge: appState.bridge)
-            }
+            HomeView(bridge: appState.bridge)
+                .tabItem {
+                    Label(AppTab.home.rawValue, systemImage: AppTab.home.icon)
+                }
+                .tag(AppTab.home)
 
-            Tab(AppTab.runtime.rawValue, systemImage: AppTab.runtime.icon, value: .runtime) {
-                RuntimeView(bridge: appState.bridge)
-            }
+            RuntimeView(bridge: appState.bridge)
+                .tabItem {
+                    Label(AppTab.runtime.rawValue, systemImage: AppTab.runtime.icon)
+                }
+                .tag(AppTab.runtime)
 
-            Tab(AppTab.logs.rawValue, systemImage: AppTab.logs.icon, value: .logs) {
-                LogsView(bridge: appState.bridge)
-            }
+            LogsView(bridge: appState.bridge)
+                .tabItem {
+                    Label(AppTab.logs.rawValue, systemImage: AppTab.logs.icon)
+                }
+                .tag(AppTab.logs)
         }
         .tint(Color.dxPrimary)
     }
